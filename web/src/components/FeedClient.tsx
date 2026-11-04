@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
+  ArrowDown,
   BellRing,
   Bookmark,
+  Check,
   ChevronDown,
   ChevronUp,
   FileText,
@@ -68,6 +70,9 @@ export default function FeedClient() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [realtimeConnected, setRealtimeConnected] = useState<boolean>(false);
   const [newItemsBannerCount, setNewItemsBannerCount] = useState<number>(0);
+  const [refreshToast, setRefreshToast] = useState<string | null>(null);
+  const [pullDistance, setPullDistance] = useState<number>(0);
+  const touchStartYRef = useRef<number | null>(null);
 
   // Mobile PWA & Drawer States
   const [mobileModalOpen, setMobileModalOpen] = useState<boolean>(false);
@@ -363,8 +368,19 @@ export default function FeedClient() {
         throw error;
       }
 
-      setItems((data as FilingItem[]) ?? []);
+      const rows = (data as FilingItem[]) ?? [];
+      setItems(rows);
       setNewItemsBannerCount(0);
+      if (isManualRefresh) {
+        const nowTime = new Date().toLocaleTimeString("ko-KR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        });
+        setRefreshToast(`최신 동기화 완료 · 총 ${rows.length}건 (${nowTime})`);
+        setTimeout(() => setRefreshToast(null), 2200);
+      }
     } catch (err) {
       const message =
         err instanceof Error
@@ -543,8 +559,40 @@ export default function FeedClient() {
     return { bullish, bearish, neutral };
   }, [items, selectedTicker, selectedSource, watchlistSet, bookmarkSet]);
 
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (watchlistModalOpen || mobileModalOpen) return;
+    if (typeof window !== "undefined" && window.scrollY <= 2) {
+      touchStartYRef.current = e.touches[0].clientY;
+    } else {
+      touchStartYRef.current = null;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (touchStartYRef.current === null || refreshing) return;
+    const deltaY = e.touches[0].clientY - touchStartYRef.current;
+    if (deltaY > 12 && window.scrollY <= 2) {
+      setPullDistance(Math.min(deltaY * 0.45, 76));
+    } else if (deltaY < 0) {
+      setPullDistance(0);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (pullDistance >= 54 && !refreshing) {
+      void fetchFilings(true);
+    }
+    touchStartYRef.current = null;
+    setPullDistance(0);
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50/70 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors">
+    <div
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      className="min-h-screen bg-slate-50/70 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors"
+    >
       {/* Sticky Mobile-Slim App Header with Safe-Area Top */}
       <header className="sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md shadow-xs pt-safe">
         <div className="mx-auto max-w-2xl px-3.5 sm:px-4 pt-3 pb-2">
@@ -556,6 +604,7 @@ export default function FeedClient() {
                 setSelectedTicker("ALL");
                 setSelectedSource("ALL");
                 window.scrollTo({ top: 0, behavior: "smooth" });
+                void fetchFilings(true);
               }}
               className="flex items-center gap-2 min-w-0 text-left"
             >
@@ -676,9 +725,10 @@ export default function FeedClient() {
               <button
                 type="button"
                 aria-label="새로고침"
+                title="최신 공시·뉴스 새로고침"
                 onClick={() => void fetchFilings(true)}
                 disabled={refreshing}
-                className="hidden xs:flex h-9 w-9 items-center justify-center rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-95 transition-all disabled:opacity-50"
+                className="flex h-9 w-9 items-center justify-center rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-95 transition-all disabled:opacity-50"
               >
                 <RefreshCw
                   className={`h-4 w-4 ${refreshing ? "animate-spin text-blue-600" : ""}`}
@@ -921,6 +971,42 @@ export default function FeedClient() {
 
       {/* Main Feed Content */}
       <main className="mx-auto w-full max-w-2xl flex-1 px-3.5 sm:px-4 py-3.5 sm:py-4 space-y-3.5">
+        {/* Mobile Pull-to-Refresh Indicator */}
+        {(pullDistance > 0 || refreshing) && (
+          <div
+            style={pullDistance > 0 ? { height: `${Math.max(36, pullDistance)}px` } : undefined}
+            className="flex items-center justify-center transition-all"
+          >
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3.5 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 shadow-sm">
+              {refreshing ? (
+                <>
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin text-blue-600" />
+                  <span>최신 공시·뉴스 불러오는 중...</span>
+                </>
+              ) : pullDistance >= 54 ? (
+                <>
+                  <RefreshCw className="h-3.5 w-3.5 text-blue-600" />
+                  <span className="text-blue-600 dark:text-sky-400">손을 떼면 새로고침됩니다</span>
+                </>
+              ) : (
+                <>
+                  <ArrowDown className="h-3.5 w-3.5 text-slate-400" />
+                  <span>아래로 당겨서 새로고침</span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Sync Completion Toast */}
+        {refreshToast && !refreshing && (
+          <div className="flex items-center justify-center">
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 px-3.5 py-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300 shadow-2xs">
+              <Check className="h-3.5 w-3.5 text-emerald-600" />
+              <span>{refreshToast}</span>
+            </div>
+          </div>
+        )}
         {/* Local Test Control Panel */}
         {!isSupabaseConfigured && (
           <div className="rounded-2xl border border-blue-200 dark:border-sky-800/60 bg-white dark:bg-slate-900 p-3.5 sm:p-4 text-xs text-slate-700 dark:text-slate-300 shadow-xs space-y-3">
@@ -1162,6 +1248,7 @@ export default function FeedClient() {
               setSelectedTicker("ALL");
               setSelectedSource("ALL");
               window.scrollTo({ top: 0, behavior: "smooth" });
+              void fetchFilings(true);
             }}
             className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold transition-colors ${
               selectedTicker === "ALL" && selectedSource === "ALL"
