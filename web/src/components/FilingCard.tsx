@@ -243,15 +243,18 @@ export default function FilingCard({
                 aria-label={`${item.ticker} 관심종목 ${isWatched ? "해제" : "추가"}`}
                 title={isWatched ? "관심종목 해제" : "관심종목 추가"}
                 onClick={() => onToggleWatchlist(item.ticker)}
-                className={`px-1.5 py-1 border-l border-slate-700 transition-colors ${
+                className={`inline-flex items-center gap-0.5 px-2 py-1 border-l border-slate-700 text-[11px] font-bold transition-colors ${
                   isWatched
                     ? "bg-amber-400 text-slate-950"
-                    : "bg-slate-800 text-slate-300 hover:text-amber-300"
+                    : "bg-slate-800 text-slate-200 hover:bg-slate-700 hover:text-amber-300"
                 }`}
               >
                 <Star
-                  className={`h-3 w-3 ${isWatched ? "fill-slate-950" : ""}`}
+                  className={`h-3 w-3 shrink-0 ${
+                    isWatched ? "fill-slate-950" : ""
+                  }`}
                 />
+                <span>{isWatched ? "관심중" : "관심+"}</span>
               </button>
             )}
           </div>

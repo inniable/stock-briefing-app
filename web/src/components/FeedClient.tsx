@@ -11,10 +11,12 @@ import {
   Globe,
   Home,
   Moon,
+  Plus,
   QrCode,
   Radio,
   RefreshCw,
   Search,
+  Settings2,
   ShieldCheck,
   SlidersHorizontal,
   Smartphone,
@@ -29,6 +31,7 @@ import { StatusBar, Style } from "@capacitor/status-bar";
 import {
   getKoreanCompanyName,
   inferSector,
+  itemMatchesWatchlist,
   SECTOR_TABS,
   type SectorId,
 } from "@/lib/marketMeta";
@@ -46,6 +49,7 @@ import FilingCard from "./FilingCard";
 import MobileInstallModal, {
   type BeforeInstallPromptEvent,
 } from "./MobileInstallModal";
+import WatchlistModal from "./WatchlistModal";
 
 type SentimentFilter = "ALL" | SentimentType;
 type SourceFilter = "ALL" | SourceType;
@@ -67,6 +71,8 @@ export default function FeedClient() {
 
   // Mobile PWA & Drawer States
   const [mobileModalOpen, setMobileModalOpen] = useState<boolean>(false);
+  const [watchlistModalOpen, setWatchlistModalOpen] = useState<boolean>(false);
+  const [isInstalledApp, setIsInstalledApp] = useState<boolean>(false);
   const [mobileFiltersExpanded, setMobileFiltersExpanded] =
     useState<boolean>(false);
   const [deferredPrompt, setDeferredPrompt] =
@@ -137,6 +143,12 @@ export default function FeedClient() {
       } else if (tab === "sec") {
         setSelectedSource("SEC");
       }
+
+      const standalone =
+        isNativeApp() ||
+        window.matchMedia("(display-mode: standalone)").matches ||
+        Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+      setIsInstalledApp(standalone);
     } catch {
       // Ignore storage errors
     }
@@ -175,7 +187,8 @@ export default function FeedClient() {
   };
 
   const handleToggleWatchlist = useCallback((ticker: string) => {
-    const upper = ticker.toUpperCase();
+    const upper = ticker.trim().toUpperCase().replace(/^\$/, "");
+    if (!upper || upper === "MARKET") return;
     setWatchlist((prev) => {
       const next = prev.includes(upper)
         ? prev.filter((t) => t !== upper)
@@ -187,6 +200,15 @@ export default function FeedClient() {
       }
       return next;
     });
+  }, []);
+
+  const handleClearWatchlist = useCallback(() => {
+    setWatchlist([]);
+    try {
+      localStorage.setItem(LS_WATCHLIST, JSON.stringify([]));
+    } catch {
+      // Ignore storage write errors
+    }
   }, []);
 
   const handleToggleBookmark = useCallback((uniqueId: string) => {
@@ -255,7 +277,9 @@ export default function FeedClient() {
     if (!isNativeApp()) return;
 
     const listenerPromise = App.addListener("backButton", () => {
-      if (mobileModalOpen) {
+      if (watchlistModalOpen) {
+        setWatchlistModalOpen(false);
+      } else if (mobileModalOpen) {
         setMobileModalOpen(false);
       } else if (searchOpen) {
         setSearchOpen(false);
@@ -271,7 +295,7 @@ export default function FeedClient() {
     return () => {
       void listenerPromise.then((handle) => handle.remove());
     };
-  }, [mobileModalOpen, searchOpen, selectedTicker, selectedSource]);
+  }, [watchlistModalOpen, mobileModalOpen, searchOpen, selectedTicker, selectedSource]);
 
   const handleLoadRealLiveRss = async () => {
     setLivePreviewLoading(true);
@@ -432,7 +456,7 @@ export default function FeedClient() {
 
     return items.filter((item) => {
       if (selectedTicker === "WATCHLIST") {
-        if (!watchlistSet.has(item.ticker.toUpperCase())) return false;
+        if (!itemMatchesWatchlist(item, watchlistSet)) return false;
       } else if (selectedTicker === "BOOKMARKS") {
         if (!bookmarkSet.has(item.unique_id)) return false;
       } else if (selectedTicker !== "ALL" && item.ticker !== selectedTicker) {
@@ -711,6 +735,15 @@ export default function FeedClient() {
 
             <button
               type="button"
+              onClick={() => setWatchlistModalOpen(true)}
+              className="inline-flex shrink-0 items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-extrabold transition-all border bg-amber-50 dark:bg-amber-500/15 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-500/40 hover:bg-amber-100 active:scale-95"
+            >
+              <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
+              <span>관심설정</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setSelectedTicker("BOOKMARKS")}
               className={`hidden sm:inline-flex shrink-0 items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold transition-all border ${
                 selectedTicker === "BOOKMARKS"
@@ -940,15 +973,50 @@ export default function FeedClient() {
           </div>
         )}
 
-        {/* Watchlist Helper Bar */}
+        {/* Interactive Watchlist Management Bar */}
         {selectedTicker === "WATCHLIST" && (
-          <div className="rounded-xl bg-amber-50/90 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 px-3.5 py-2.5 text-xs text-amber-900 dark:text-amber-200 flex flex-wrap items-center justify-between gap-2">
-            <span>
-              <strong>내 관심종목:</strong>{" "}
-              {watchlist.length > 0
-                ? watchlist.map((t) => `$${t}`).join(", ")
-                : "아직 등록된 관심종목이 없습니다 (카드 티커 옆 ★ 버튼 터치)"}
-            </span>
+          <div className="rounded-2xl bg-amber-50/90 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-3.5 text-xs text-amber-950 dark:text-amber-200 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-extrabold flex items-center gap-1.5">
+                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-500 shrink-0" />
+                <span>내 관심종목 ({watchlist.length}개)</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setWatchlistModalOpen(true)}
+                className="inline-flex items-center gap-1 rounded-xl bg-amber-400 hover:bg-amber-500 px-3 py-1.5 text-xs font-extrabold text-slate-950 shadow-2xs active:scale-95 transition-all"
+              >
+                <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
+                <span>종목 추가·편집</span>
+              </button>
+            </div>
+
+            {watchlist.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {watchlist.map((t) => {
+                  const kr = getKoreanCompanyName(t);
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => handleToggleWatchlist(t)}
+                      title={`${t} 관심종목 해제`}
+                      className="inline-flex items-center gap-1 rounded-lg bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-500/40 px-2 py-1 text-[11px] font-bold text-slate-900 dark:text-white hover:border-rose-400 transition-colors"
+                    >
+                      <span>
+                        ${t}
+                        {kr && kr !== t ? ` ${kr}` : ""}
+                      </span>
+                      <X className="h-3 w-3 text-slate-400 hover:text-rose-600" />
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-amber-800 dark:text-amber-300">
+                등록된 관심종목이 없습니다. 우측 상단 <strong>&apos;종목 추가·편집&apos;</strong> 버튼을 눌러 원하는 종목을 담아보세요!
+              </p>
+            )}
           </div>
         )}
 
@@ -1011,25 +1079,41 @@ export default function FeedClient() {
         ) : filteredItems.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-14 px-6 text-center space-y-3 shadow-xs">
             <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
-              선택한 조건에 해당하는 공시·뉴스 브리핑이 없습니다.
+              {selectedTicker === "WATCHLIST"
+                ? "현재 등록된 관심종목의 최근 공시·뉴스 브리핑이 아직 없습니다."
+                : "선택한 조건에 해당하는 공시·뉴스 브리핑이 없습니다."}
             </p>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              필터를 초기화하거나 상단 검색창에서 다른 티커·키워드를 입력해 보세요.
+              {selectedTicker === "WATCHLIST"
+                ? "원하는 종목을 추가로 등록해 두시면 새 공시·뉴스가 올라올 때 자동으로 여기에 모입니다."
+                : "필터를 초기화하거나 상단 검색창에서 다른 티커·키워드를 입력해 보세요."}
             </p>
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedTicker("ALL");
-                setSelectedSector("ALL");
-                setSelectedSentiment("ALL");
-                setSelectedSource("ALL");
-                setUnreadOnly(false);
-                setSearchQuery("");
-              }}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 dark:bg-sky-500 hover:bg-blue-700 px-4 py-2.5 text-xs font-bold text-white dark:text-slate-950 transition-colors"
-            >
-              필터 전체 초기화
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              {selectedTicker === "WATCHLIST" && (
+                <button
+                  type="button"
+                  onClick={() => setWatchlistModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-amber-400 hover:bg-amber-500 px-4 py-2.5 text-xs font-extrabold text-slate-950 transition-colors shadow-2xs"
+                >
+                  <Star className="h-3.5 w-3.5 fill-slate-950" />
+                  <span>관심종목 추가·변경하기</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedTicker("ALL");
+                  setSelectedSector("ALL");
+                  setSelectedSentiment("ALL");
+                  setSelectedSource("ALL");
+                  setUnreadOnly(false);
+                  setSearchQuery("");
+                }}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 dark:bg-sky-500 hover:bg-blue-700 px-4 py-2.5 text-xs font-bold text-white dark:text-slate-950 transition-colors"
+              >
+                전체 피드 보기
+              </button>
+            </div>
           </div>
         ) : (
           <div className="space-y-3.5">
@@ -1145,16 +1229,36 @@ export default function FeedClient() {
             <span>저장({bookmarkedIds.length})</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setMobileModalOpen(true)}
-            className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold text-slate-600 dark:text-slate-300"
-          >
-            <Smartphone className="h-4 w-4 text-blue-600 dark:text-sky-400" />
-            <span>앱설치·QR</span>
-          </button>
+          {isInstalledApp ? (
+            <button
+              type="button"
+              onClick={() => setWatchlistModalOpen(true)}
+              className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400"
+            >
+              <Settings2 className="h-4 w-4" />
+              <span>관심설정</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setMobileModalOpen(true)}
+              className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold text-slate-600 dark:text-slate-300"
+            >
+              <Smartphone className="h-4 w-4 text-blue-600 dark:text-sky-400" />
+              <span>앱설치·QR</span>
+            </button>
+          )}
         </div>
       </nav>
+
+      {/* Dedicated Watchlist Search / Add / Remove Modal */}
+      <WatchlistModal
+        open={watchlistModalOpen}
+        watchlist={watchlist}
+        onClose={() => setWatchlistModalOpen(false)}
+        onToggleTicker={handleToggleWatchlist}
+        onClearAll={handleClearWatchlist}
+      />
 
       {/* Mobile QR Connect & Native PWA Install Modal */}
       <MobileInstallModal

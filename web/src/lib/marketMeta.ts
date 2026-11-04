@@ -115,7 +115,131 @@ export const KR_COMPANY_NAMES: Record<string, string> = {
   BKNG: "부킹홀딩스",
   F: "포드",
   GM: "제너럴모터스",
+  RKLB: "로켓랩",
+  ASTS: "AST스페이스모바일",
+  IONQ: "아이온큐",
+  RGTI: "리게티컴퓨팅",
+  ANET: "아리스타네트웍스",
+  RDDT: "레딧",
+  DELL: "델 테크놀로지스",
+  VST: "비스트라에너지",
+  CEG: "컨스텔레이션에너지",
+  RIVN: "리비안",
+  LCID: "루시드",
+  SOXL: "필라델피아반도체 3배 ETF",
+  TQQQ: "나스닥100 3배 ETF",
+  QQQ: "나스닥100 ETF",
+  SPY: "S&P500 ETF",
+  SCHD: "슈왑 배당주 ETF",
 };
+
+export const POPULAR_WATCHLIST_CANDIDATES: string[] = [
+  "NVDA",
+  "TSLA",
+  "AAPL",
+  "MSFT",
+  "PLTR",
+  "GOOGL",
+  "AMZN",
+  "META",
+  "AMD",
+  "AVGO",
+  "PANW",
+  "IONQ",
+  "RKLB",
+  "MSTR",
+  "COIN",
+  "LLY",
+  "MCD",
+  "COST",
+  "NFLX",
+  "JPM",
+  "ANET",
+  "SOXL",
+  "TQQQ",
+  "SCHD",
+];
+
+export function searchStockCatalog(
+  query: string
+): { ticker: string; krName: string }[] {
+  const q = query.trim().toLowerCase().replace(/^\$/, "");
+  const entries = Object.entries(KR_COMPANY_NAMES).filter(
+    ([ticker]) => ticker !== "MARKET" && ticker !== "GOOG" && ticker !== "BRK-A"
+  );
+
+  if (!q) {
+    return POPULAR_WATCHLIST_CANDIDATES.map((t) => ({
+      ticker: t,
+      krName: KR_COMPANY_NAMES[t] ?? t,
+    }));
+  }
+
+  return entries
+    .filter(
+      ([ticker, kr]) =>
+        ticker.toLowerCase().includes(q) || kr.toLowerCase().includes(q)
+    )
+    .sort((a, b) => {
+      const aExact =
+        a[0].toLowerCase() === q || a[1].toLowerCase().startsWith(q) ? 0 : 1;
+      const bExact =
+        b[0].toLowerCase() === q || b[1].toLowerCase().startsWith(q) ? 0 : 1;
+      return aExact - bExact;
+    })
+    .slice(0, 20)
+    .map(([ticker, krName]) => ({ ticker, krName }));
+}
+
+export function itemMatchesWatchlist(
+  item: {
+    ticker: string;
+    company_name: string;
+    headline_kr: string;
+    original_title: string;
+    summary_lines?: string[];
+    key_numbers?: string[];
+  },
+  watchlistSet: Set<string>
+): boolean {
+  if (watchlistSet.size === 0) return false;
+  const primary = (item.ticker || "").trim().toUpperCase();
+  if (watchlistSet.has(primary)) return true;
+
+  const textPool = [
+    item.company_name,
+    item.headline_kr,
+    item.original_title,
+    ...(Array.isArray(item.summary_lines) ? item.summary_lines : []),
+    ...(Array.isArray(item.key_numbers) ? item.key_numbers : []),
+  ].join(" ");
+  const upperPool = textPool.toUpperCase();
+
+  for (const watched of watchlistSet) {
+    const w = watched.trim().toUpperCase();
+    if (!w || w === "MARKET") continue;
+
+    // Match explicit $TICKER or (TICKER) for any length, or standalone word for 3+ char tickers
+    if (
+      upperPool.includes(`$${w}`) ||
+      upperPool.includes(`(${w})`) ||
+      (w.length >= 3 && new RegExp(`\\b${w.replace("-", "\\-")}\\b`).test(upperPool))
+    ) {
+      return true;
+    }
+
+    // Match Korean company name (strip parenthetical alias like '알파벳(구글)' -> '알파벳')
+    const kr = KR_COMPANY_NAMES[w];
+    if (kr && kr !== w) {
+      const baseKr = kr.split("(")[0].trim();
+      if (baseKr.length >= 2 && textPool.includes(baseKr)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
 
 const TICKER_SECTOR_MAP: Record<string, SectorId> = {
   MARKET: "MACRO",

@@ -1,7 +1,8 @@
 {
-  "max_items_per_feed": 6,
+  "max_items_per_feed": 4,
   "max_global_sec_items": 15,
   "max_unprioritized_sec_per_run": 3,
+  "max_inserts_per_run": 12,
   "max_text_chars": 15000,
   "priority_tickers": [
     "AAPL", "MSFT", "NVDA", "GOOGL", "GOOG", "AMZN", "META", "TSLA", "BRK-B", "BRK-A",
@@ -15,8 +16,8 @@
     "CRWD", "ANET", "ADI", "DE", "GILD", "BSX", "VRTX", "SBUX", "NKE", "ADP",
     "MDLZ", "BMY", "TJX", "PLD", "COP", "LMT", "MMC", "NOC", "GD", "SO",
     "COIN", "MSTR", "HOOD", "SNOW", "ARM", "SMCI", "DELL", "HPQ", "PYPL", "SQ",
-    "SHOP", "SPOT", "ABNB", "DASH", "RDDT", "IONQ", "RGTI", "SOFI", "RIVN", "LCID",
-    "F", "GM", "DAL", "UAL", "TGT", "CVS", "CI", "ELV", "REGN", "MRNA"
+    "SHOP", "SPOT", "ABNB", "DASH", "RDDT", "IONQ", "RGTI", "ASTS", "RKLB", "SOFI",
+    "RIVN", "LCID", "VST", "CEG", "F", "GM", "DAL", "UAL", "TGT", "CVS", "CI", "ELV", "REGN", "MRNA"
   ],
   "feeds": [
     {
@@ -35,41 +36,6 @@
       "is_global_sec": true,
       "priority_only": true,
       "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&CIK=&type=4&company=&dateb=&owner=only&start=0&count=40&output=atom"
-    },
-    {
-      "ticker": "MARKET",
-      "company_name": "Yahoo Finance",
-      "source_type": "NEWS",
-      "filing_type": "Market News",
-      "url": "https://feeds.finance.yahoo.com/rss/2.0/headline?s=%5EGSPC,%5EIXIC&region=US&lang=en-US"
-    },
-    {
-      "ticker": "MARKET",
-      "company_name": "CNBC Finance",
-      "source_type": "NEWS",
-      "filing_type": "Market News",
-      "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664"
-    },
-    {
-      "ticker": "MARKET",
-      "company_name": "CNBC Earnings",
-      "source_type": "NEWS",
-      "filing_type": "Earnings News",
-      "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=15839135"
-    },
-    {
-      "ticker": "MARKET",
-      "company_name": "MarketWatch",
-      "source_type": "NEWS",
-      "filing_type": "Top Stories",
-      "url": "https://feeds.content.dowjones.io/public/rss/mw_topstories"
-    },
-    {
-      "ticker": "MARKET",
-      "company_name": "PR Newswire",
-      "source_type": "PRESS",
-      "filing_type": "Press Wire",
-      "url": "https://www.prnewswire.com/rss/financial-services-latest-news/financial-services-latest-news-list.rss"
     },
     {
       "ticker": "NVDA",
@@ -112,6 +78,41 @@
       "source_type": "PRESS",
       "filing_type": "Newsroom",
       "url": "https://about.fb.com/news/feed/"
+    },
+    {
+      "ticker": "MARKET",
+      "company_name": "PR Newswire",
+      "source_type": "PRESS",
+      "filing_type": "Press Wire",
+      "url": "https://www.prnewswire.com/rss/financial-services-latest-news/financial-services-latest-news-list.rss"
+    },
+    {
+      "ticker": "MARKET",
+      "company_name": "CNBC Earnings",
+      "source_type": "NEWS",
+      "filing_type": "Earnings News",
+      "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=15839135"
+    },
+    {
+      "ticker": "MARKET",
+      "company_name": "Yahoo Finance",
+      "source_type": "NEWS",
+      "filing_type": "Market News",
+      "url": "https://feeds.finance.yahoo.com/rss/2.0/headline?s=%5EGSPC,%5EIXIC&region=US&lang=en-US"
+    },
+    {
+      "ticker": "MARKET",
+      "company_name": "CNBC Finance",
+      "source_type": "NEWS",
+      "filing_type": "Market News",
+      "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664"
+    },
+    {
+      "ticker": "MARKET",
+      "company_name": "MarketWatch",
+      "source_type": "NEWS",
+      "filing_type": "Top Stories",
+      "url": "https://feeds.content.dowjones.io/public/rss/mw_topstories"
     }
   ]
 }
