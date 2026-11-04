@@ -4,6 +4,8 @@
 !.env.example
 web/.env*
 !web/.env.example
+laptop-env-backup.txt
+*-env-backup.txt
 
 # Python
 __pycache__/

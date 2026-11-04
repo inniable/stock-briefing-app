@@ -1,6 +1,42 @@
 # US 빅테크 공식 공시(SEC EDGAR) · 뉴스룸 실시간 AI 브리핑 PWA
 
-저작권 분쟁 위험이 전혀 없는(**Zero Copyright Risk**) 1차 원본 데이터(미국 SEC EDGAR 공식 Atom 피드 & M7 빅테크 공식 뉴스룸 RSS)만을 수집하여, **Gemini 2.5 Flash**로 실시간 한글 번역·감성 분석·3줄 요약해 제공하는 **운영비 0원(Zero-cost Serverless)** 모노레포 웹앱입니다.
+저작권 분쟁 위험이 전혀 없는(**Zero Copyright Risk**) 1차 원본 데이터(미국 SEC EDGAR 공식 Atom 피드 & M7 빅테크 공식 뉴스룸 RSS)만을 수집하여, **Gemini 3.1 / 3.5 Flash**로 실시간 한글 번역·감성 분석·3줄 요약해 제공하는 **운영비 0원(Zero-cost Serverless)** 모노레포 웹앱 & Android `.apk` 앱입니다.
+
+---
+
+## 💻 집 노트북 / 다른 PC에서 1분 만에 이어서 작업하기
+
+모든 소스코드·프로젝트 규칙([`AGENTS.md`](./AGENTS.md))·자동 수집기·Android APK 자동 빌드 파이프라인은 GitHub 저장소(`https://github.com/inniable/stock-briefing-app`)에 동기화되어 있습니다.
+
+### 1) 최초 1회 세팅 (집 노트북에서 처음 열 때)
+1. **저장소 복제 (Clone)**
+   ```bash
+   git clone https://github.com/inniable/stock-briefing-app.git
+   cd stock-briefing-app
+   ```
+2. **환경변수 백업 파일 복사 (선택 · 키 직접 입력 생략용)**
+   - 기존 PC 폴더에 생성된 `laptop-env-backup.txt`(카카오톡 나에게 보내기·메일·USB 등으로 전달)를 복제한 `stock-briefing-app` 폴더 바로 아래에 넣습니다. *(보안을 위해 Git에는 절대 업로드되지 않도록 `.gitignore` 처리되어 있습니다.)*
+3. **원클릭 자동 세팅 실행**
+   - **Windows (PowerShell):**
+     ```powershell
+     powershell -ExecutionPolicy Bypass -File .\setup-dev.ps1
+     ```
+   - **macOS / Linux:**
+     ```bash
+     bash ./setup-dev.sh
+     ```
+   - 위 스크립트 하나로 `.env` + `web/.env.local` 자동 생성, `web` npm 패키지 설치, Python `.venv` 가상환경 구성까지 모두 자동 완료됩니다.
+   - **Antigravity IDE를 사용하는 경우:** 폴더를 열고 *"laptop-env-backup.txt로 초기 세팅하고 서버 켜줘"*라고만 입력하면 자동으로 세팅됩니다.
+
+### 2) 일상 동기화 (회사 PC ↔ 집 노트북 오갈 때)
+- **작업 시작 전 (최신 코드 받기):** `git pull`
+- **작업 완료 후 (저장 및 Android APK 자동 빌드):**
+  ```bash
+  git add .
+  git commit -m "작업 내용 요약"
+  git push
+  ```
+  *(참고: `web/` 폴더 수정 후 `git push` 하면 GitHub Actions가 약 1분 30초 만에 최신 서명된 `StockBriefing-Android.apk`를 자동 재빌드해 Releases에 업데이트합니다.)*
 
 ---
 
