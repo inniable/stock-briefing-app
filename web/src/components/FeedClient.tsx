@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
   AlertCircle,
   ArrowDown,
@@ -47,6 +48,7 @@ import {
   type SentimentType,
   type SourceType,
 } from "@/types/filing";
+import AiReportModal from "./AiReportModal";
 import FilingCard from "./FilingCard";
 import MobileInstallModal, {
   type BeforeInstallPromptEvent,
@@ -59,6 +61,7 @@ type SourceFilter = "ALL" | SourceType;
 const LS_WATCHLIST = "sb_watchlist_v1";
 const LS_BOOKMARKS = "sb_bookmarks_v1";
 const LS_READ_IDS = "sb_read_ids_v1";
+const LS_HIDDEN_IDS = "sb_hidden_ids_v1";
 const LS_THEME = "sb_theme_v1";
 const LS_LARGE_TEXT = "sb_large_text_v1";
 
@@ -96,6 +99,10 @@ export default function FeedClient() {
   ]);
   const [bookmarkedIds, setBookmarkedIds] = useState<string[]>([]);
   const [readIds, setReadIds] = useState<string[]>([]);
+  const [hiddenIds, setHiddenIds] = useState<string[]>([]);
+  const [reportTargetItem, setReportTargetItem] = useState<FilingItem | null>(
+    null
+  );
 
   // Filter States
   const [selectedTicker, setSelectedTicker] = useState<string>("ALL");
@@ -141,6 +148,12 @@ export default function FeedClient() {
       if (savedRead) {
         const parsed = JSON.parse(savedRead) as string[];
         if (Array.isArray(parsed)) setReadIds(parsed);
+      }
+
+      const savedHidden = localStorage.getItem(LS_HIDDEN_IDS);
+      if (savedHidden) {
+        const parsed = JSON.parse(savedHidden) as string[];
+        if (Array.isArray(parsed)) setHiddenIds(parsed);
       }
 
       const params = new URLSearchParams(window.location.search);
@@ -252,6 +265,19 @@ export default function FeedClient() {
     });
   }, []);
 
+  const handleHideItem = useCallback((uniqueId: string) => {
+    setHiddenIds((prev) => {
+      if (prev.includes(uniqueId)) return prev;
+      const next = [uniqueId, ...prev].slice(0, 300);
+      try {
+        localStorage.setItem(LS_HIDDEN_IDS, JSON.stringify(next));
+      } catch {
+        // Ignore storage write errors
+      }
+      return next;
+    });
+  }, []);
+
   const handleSimulateIncoming = () => {
     const template =
       SIMULATED_LIVE_FILINGS[simIndex % SIMULATED_LIVE_FILINGS.length];
@@ -284,7 +310,9 @@ export default function FeedClient() {
     if (!isNativeApp()) return;
 
     const listenerPromise = App.addListener("backButton", () => {
-      if (watchlistModalOpen) {
+      if (reportTargetItem) {
+        setReportTargetItem(null);
+      } else if (watchlistModalOpen) {
         setWatchlistModalOpen(false);
       } else if (mobileModalOpen) {
         setMobileModalOpen(false);
@@ -302,7 +330,7 @@ export default function FeedClient() {
     return () => {
       void listenerPromise.then((handle) => handle.remove());
     };
-  }, [watchlistModalOpen, mobileModalOpen, searchOpen, selectedTicker, selectedSource]);
+  }, [reportTargetItem, watchlistModalOpen, mobileModalOpen, searchOpen, selectedTicker, selectedSource]);
 
   const handleLoadRealLiveRss = async () => {
     setLivePreviewLoading(true);
@@ -505,6 +533,7 @@ export default function FeedClient() {
   const watchlistSet = useMemo(() => new Set(watchlist), [watchlist]);
   const bookmarkSet = useMemo(() => new Set(bookmarkedIds), [bookmarkedIds]);
   const readSet = useMemo(() => new Set(readIds), [readIds]);
+  const hiddenSet = useMemo(() => new Set(hiddenIds), [hiddenIds]);
 
   const activeSubFilterCount =
     (selectedSector !== "ALL" ? 1 : 0) +
@@ -516,6 +545,8 @@ export default function FeedClient() {
     const q = searchQuery.trim().toLowerCase();
 
     return items.filter((item) => {
+      if (hiddenSet.has(item.unique_id)) return false;
+
       if (selectedTicker === "WATCHLIST") {
         if (!itemMatchesWatchlist(item, watchlistSet)) return false;
       } else if (selectedTicker === "BOOKMARKS") {
@@ -572,6 +603,7 @@ export default function FeedClient() {
     watchlistSet,
     bookmarkSet,
     readSet,
+    hiddenSet,
     searchQuery,
   ]);
 
@@ -690,15 +722,17 @@ export default function FeedClient() {
 
             {/* Right Action Buttons */}
             <div className="flex items-center gap-1 shrink-0">
-              {/* Desktop QR / Mobile Connect Button */}
-              <button
-                type="button"
-                onClick={() => setMobileModalOpen(true)}
-                className="hidden sm:inline-flex h-9 px-2.5 items-center gap-1.5 rounded-xl bg-blue-50 dark:bg-sky-500/15 border border-blue-200 dark:border-sky-500/30 text-xs font-extrabold text-blue-700 dark:text-sky-300 hover:bg-blue-100 transition-colors"
-              >
-                <QrCode className="h-3.5 w-3.5" />
-                <span>모바일 연결</span>
-              </button>
+              {/* Desktop QR / Mobile Connect Button (Hidden inside Native App / Standalone PWA for Google Play Policy) */}
+              {!isInstalledApp && (
+                <button
+                  type="button"
+                  onClick={() => setMobileModalOpen(true)}
+                  className="hidden sm:inline-flex h-9 px-2.5 items-center gap-1.5 rounded-xl bg-blue-50 dark:bg-sky-500/15 border border-blue-200 dark:border-sky-500/30 text-xs font-extrabold text-blue-700 dark:text-sky-300 hover:bg-blue-100 transition-colors"
+                >
+                  <QrCode className="h-3.5 w-3.5" />
+                  <span>모바일 연결</span>
+                </button>
+              )}
 
               <button
                 type="button"
@@ -1083,14 +1117,16 @@ export default function FeedClient() {
                 </span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => setMobileModalOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] px-3.5 py-2.5 text-xs font-bold text-white transition-all"
-              >
-                <QrCode className="h-3.5 w-3.5" />
-                <span>스마트폰 QR 접속·앱 설치</span>
-              </button>
+              {!isInstalledApp && (
+                <button
+                  type="button"
+                  onClick={() => setMobileModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] px-3.5 py-2.5 text-xs font-bold text-white transition-all"
+                >
+                  <QrCode className="h-3.5 w-3.5" />
+                  <span>스마트폰 QR 접속·앱 설치</span>
+                </button>
+              )}
 
               <button
                 type="button"
@@ -1261,6 +1297,7 @@ export default function FeedClient() {
                 onToggleWatchlist={handleToggleWatchlist}
                 onToggleBookmark={handleToggleBookmark}
                 onMarkRead={handleMarkRead}
+                onReportAi={(target) => setReportTargetItem(target)}
               />
             ))}
           </div>
@@ -1269,15 +1306,29 @@ export default function FeedClient() {
 
       {/* Footer (Extra bottom padding on mobile so Fixed Bottom Tab Bar never overlaps) */}
       <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 py-6 pb-24 sm:pb-8 px-4 mt-6">
-        <div className="mx-auto max-w-2xl space-y-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-          <div className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300">
-            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-            <span>이미지 미수집 · 공식 공시 및 공개 RSS 요약 서비스</span>
+        <div className="mx-auto max-w-2xl space-y-2.5 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>공식 공시·공개 RSS AI 요약 서비스 · 투자 유의 안내</span>
+            </div>
+            <div className="flex items-center gap-3 font-bold text-slate-600 dark:text-slate-300">
+              <Link
+                href="/privacy"
+                className="underline hover:text-blue-600 dark:hover:text-sky-400 transition-colors"
+              >
+                개인정보처리방침 · 면책고지
+              </Link>
+              <a
+                href={`mailto:${process.env.NEXT_PUBLIC_CONTACT_EMAIL || "admin@inniable.dev"}?subject=${encodeURIComponent("[공시브리핑 문의/오류제보]")}`}
+                className="underline hover:text-blue-600 dark:hover:text-sky-400 transition-colors"
+              >
+                문의·오류제보
+              </a>
+            </div>
           </div>
           <p>
-            본 웹앱은 외부 웹사이트의 이미지를 일절 수집·렌더링하지 않으며, 미국 SEC EDGAR 전체 실시간 공시(8-K·Form 4)와
-            기업 보도자료(PR Newswire·뉴스룸), 글로벌 금융 뉴스 RSS를 Gemini 2.5 Flash로 번역·요약하고
-            모든 카드에 공식 원문 링크를 제공합니다.
+            본 서비스의 한글 번역·3줄 요약 및 <strong>호재(Bullish)·악재(Bearish)·중립</strong> 감성 분류는 생성형 AI(Google Gemini)가 공식 공시·보도자료 이해를 돕기 위해 자동 생성한 참고 정보이며, <strong>특정 종목의 매수·매도 추천이나 금융·투자 자문이 아닙니다.</strong> AI 요약 과정에서 번역 오차나 수치 누락이 발생할 수 있으므로 투자 판단 전 반드시 카드 하단의 공식 원문을 직접 확인하시기 바라며, 모든 투자 결정과 책임은 이용자 본인에게 있습니다. 부적절하거나 부정확한 AI 요약은 각 카드 하단의 깃발(신고) 아이콘으로 즉시 신고·숨김 처리할 수 있습니다.
           </p>
         </div>
       </footer>
@@ -1399,6 +1450,13 @@ export default function FeedClient() {
         onClose={() => setMobileModalOpen(false)}
         deferredPrompt={deferredPrompt}
         onInstalled={() => setDeferredPrompt(null)}
+      />
+
+      {/* Generative AI Summary Error & Content Report Modal (Google Play AI Policy Compliance) */}
+      <AiReportModal
+        item={reportTargetItem}
+        onClose={() => setReportTargetItem(null)}
+        onHideItem={handleHideItem}
       />
     </div>
   );

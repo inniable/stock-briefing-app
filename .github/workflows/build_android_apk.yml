@@ -1,10 +1,10 @@
-name: Build Installable Android APK
+name: Build Android Play Store AAB & APK
 
 on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'GitHub Release 태그 이름 (스마트폰 직접 다운로드 링크 생성용)'
+        description: 'GitHub Release 태그 이름 (스마트폰 직접 다운로드 및 AAB 보관용)'
         required: false
         default: 'latest-apk'
   push:
@@ -19,9 +19,9 @@ permissions:
   contents: write
 
 jobs:
-  build-apk:
+  build-android:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -50,28 +50,22 @@ jobs:
           npm ci
           npm run build:apk
 
-      - name: Build Android Release APK via Gradle
+      - name: Prepare Upload Keystore (Google Play App Signing)
         working-directory: web/android
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
-
-      - name: Sign & Align Installable APK (V1 + V2 Signature)
-        working-directory: web/android
-        run: |
-          BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -n 1)
-          UNSIGNED_APK="app/build/outputs/apk/release/app-release-unsigned.apk"
-          ALIGNED_APK="app/build/outputs/apk/release/app-release-aligned.apk"
-          SIGNED_APK="$GITHUB_WORKSPACE/StockBriefing-Android.apk"
-
-          # Generate signing keystore (uses GitHub Secret if provided, else self-signed release key)
-          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
-            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
-            KS_PASS="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
-            KEY_ALIAS="${{ secrets.ANDROID_KEY_ALIAS }}"
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > upload-keystore.p12
+            printf "storeFile=upload-keystore.p12\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n" "$KS_PASS" "$KS_ALIAS" "$KS_PASS" > keystore.properties
+            echo "✅ Fixed Google Play Upload Keystore loaded from GitHub Secrets." >> "$GITHUB_STEP_SUMMARY"
           else
+            echo "⚠️ **주의:** ANDROID_KEYSTORE_BASE64 시크릿이 등록되지 않아 테스트용 임시 서명 키로 빌드합니다. Google Play Console 정식 업로드 전 반드시 고정 Upload Keystore 시크릿을 등록하세요." >> "$GITHUB_STEP_SUMMARY"
             keytool -genkeypair -v \
-              -keystore release.keystore \
+              -storetype PKCS12 \
+              -keystore upload-keystore.p12 \
               -alias stockbriefing \
               -keyalg RSA \
               -keysize 2048 \
@@ -79,41 +73,54 @@ jobs:
               -storepass stockbriefing123 \
               -keypass stockbriefing123 \
               -dname "CN=StockBriefing, OU=Mobile, O=StockBriefing, L=Seoul, S=Seoul, C=KR"
-            KS_PASS="stockbriefing123"
-            KEY_ALIAS="stockbriefing"
+            printf "storeFile=upload-keystore.p12\nstorePassword=stockbriefing123\nkeyAlias=stockbriefing\nkeyPassword=stockbriefing123\n" > keystore.properties
           fi
 
-          "$BUILD_TOOLS_DIR/zipalign" -v -p 4 "$UNSIGNED_APK" "$ALIGNED_APK"
-          "$BUILD_TOOLS_DIR/apksigner" sign \
-            --ks release.keystore \
-            --ks-key-alias "$KEY_ALIAS" \
-            --ks-pass "pass:$KS_PASS" \
-            --key-pass "pass:$KS_PASS" \
-            --v1-signing-enabled true \
-            --v2-signing-enabled true \
-            --out "$SIGNED_APK" \
-            "$ALIGNED_APK"
+      - name: Build Signed Play Store AAB & Installable APK (Target SDK 35)
+        working-directory: web/android
+        env:
+          ANDROID_VERSION_CODE: ${{ 10 + github.run_number }}
+          ANDROID_VERSION_NAME: "1.1.${{ github.run_number }}"
+        run: |
+          chmod +x gradlew
+          ./gradlew bundleRelease assembleRelease --no-daemon
 
-          "$BUILD_TOOLS_DIR/apksigner" verify --verbose "$SIGNED_APK"
-          ls -lh "$SIGNED_APK"
+          cp app/build/outputs/bundle/release/app-release.aab "$GITHUB_WORKSPACE/StockBriefing-PlayStore.aab"
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/StockBriefing-Android.apk"
 
-      - name: Upload Installable APK as GitHub Actions Artifact
+          jarsigner -verify "$GITHUB_WORKSPACE/StockBriefing-PlayStore.aab"
+          BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -n 1)
+          "$BUILD_TOOLS_DIR/apksigner" verify --verbose "$GITHUB_WORKSPACE/StockBriefing-Android.apk"
+          ls -lh "$GITHUB_WORKSPACE/StockBriefing-PlayStore.aab" "$GITHUB_WORKSPACE/StockBriefing-Android.apk"
+
+      - name: Upload Play Store AAB Artifact (.aab)
+        uses: actions/upload-artifact@v4
+        with:
+          name: StockBriefing-PlayStore-AAB
+          path: StockBriefing-PlayStore.aab
+          if-no-files-found: error
+
+      - name: Upload Direct-Install APK Artifact (.apk)
         uses: actions/upload-artifact@v4
         with:
           name: StockBriefing-Android-APK
           path: StockBriefing-Android.apk
           if-no-files-found: error
 
-      - name: Publish Direct Download APK to GitHub Releases
+      - name: Publish Play Store AAB & Direct APK to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.release_tag || 'latest-apk' }}
-          name: "US 공시·뉴스 AI 브리핑 Android APK (최신 빌드)"
+          name: "US 공시·뉴스 AI 브리핑 Android 빌드 (Play Store AAB + APK)"
           body: |
-            ### 스마트폰(Android / 갤럭시) APK 직접 설치 파일
-            1. 스마트폰에서 아래 **`StockBriefing-Android.apk`** 파일을 다운로드합니다.
-            2. 다운로드된 파일을 터치하고 **'출처를 알 수 없는 앱 설치 허용'** / **'무시하고 설치'**를 누르면 즉시 앱 서랍에 **공시브리핑** 앱이 설치됩니다.
-          files: StockBriefing-Android.apk
+            ### 1. Google Play Console 등록용 번들 (`.aab`)
+            - **`StockBriefing-PlayStore.aab`** (Target SDK 35 · 서명 완료) 파일을 Google Play Console 프로덕션/비공개 테스트 트랙에 업로드하세요.
+
+            ### 2. 스마트폰 직접 설치 테스트용 파일 (`.apk`)
+            - 스마트폰에서 **`StockBriefing-Android.apk`** 파일을 내려받아 바로 설치 테스트할 수 있습니다.
+          files: |
+            StockBriefing-PlayStore.aab
+            StockBriefing-Android.apk
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

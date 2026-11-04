@@ -4,11 +4,11 @@ const config: CapacitorConfig = {
   appId: "com.stockbriefing.app",
   appName: "공시브리핑",
   webDir: "out",
-  backgroundColor: "#ffffff",
+  backgroundColor: "#0f172a",
   android: {
     allowMixedContent: false,
     buildOptions: {
-      releaseType: "APK",
+      releaseType: "AAB",
     },
   },
   plugins: {

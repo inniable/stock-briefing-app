@@ -10,6 +10,7 @@ import {
   Copy,
   ExternalLink,
   FileText,
+  Flag,
   Globe,
   Hash,
   Minus,
@@ -36,6 +37,7 @@ interface FilingCardProps {
   onToggleWatchlist?: (ticker: string) => void;
   onToggleBookmark?: (uniqueId: string) => void;
   onMarkRead?: (uniqueId: string, toggle?: boolean) => void;
+  onReportAi?: (item: FilingItem) => void;
 }
 
 function getSentimentMeta(sentiment: SentimentType) {
@@ -169,6 +171,7 @@ export default function FilingCard({
   onToggleWatchlist,
   onToggleBookmark,
   onMarkRead,
+  onReportAi,
 }: FilingCardProps) {
   const [glossaryOpen, setGlossaryOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -443,6 +446,18 @@ export default function FilingCard({
               <Bookmark
                 className={`h-3.5 w-3.5 ${isBookmarked ? "fill-current" : ""}`}
               />
+            </button>
+          )}
+
+          {onReportAi && (
+            <button
+              type="button"
+              onClick={() => onReportAi(item)}
+              aria-label="AI 요약 오류 또는 부적절 콘텐츠 신고"
+              title="AI 요약 오류·부적절 콘텐츠 신고"
+              className="inline-flex items-center gap-1 rounded-xl bg-white dark:bg-slate-900 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-slate-200 dark:border-slate-800 hover:border-rose-300 dark:hover:border-rose-800 px-2 py-1.5 text-[11px] font-semibold text-slate-500 hover:text-rose-700 dark:text-slate-400 dark:hover:text-rose-300 transition-colors"
+            >
+              <Flag className="h-3.5 w-3.5" />
             </button>
           )}
 

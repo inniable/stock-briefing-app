@@ -108,7 +108,9 @@ export function isNativeApp(): boolean {
 }
 
 export async function fetchNativeLiveFeeds(): Promise<FilingItem[]> {
-  const secUa = "StockBriefingApp AdminContact@example.com";
+  const contactEmail =
+    process.env.NEXT_PUBLIC_CONTACT_EMAIL || "admin@inniable.dev";
+  const secUa = `StockBriefingApp ${contactEmail}`;
 
   if (!cachedNativeCikMap) {
     cachedNativeCikMap = new Map();

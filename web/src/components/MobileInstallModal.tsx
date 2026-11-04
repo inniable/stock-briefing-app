@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { isNativeApp } from "@/lib/nativeLiveFeeds";
 import {
   Check,
   Copy,
@@ -158,7 +159,8 @@ export default function MobileInstallModal({
     }
   };
 
-  if (!open) return null;
+  // Google Play Policy Compliance: Never expose external APK download UI inside the native Android app
+  if (!open || isNativeApp()) return null;
 
   const activeUrl =
     selectedMode === "apk"
