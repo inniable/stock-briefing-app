@@ -28,6 +28,7 @@ web/android/capacitor-cordova-android-plugins/build/
 web/android/local.properties
 *.keystore
 *.jks
+*.apk
 *.tsbuildinfo
 next-env.d.ts
 

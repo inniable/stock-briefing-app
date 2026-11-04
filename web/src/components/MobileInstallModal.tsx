@@ -31,6 +31,10 @@ interface MobileAccessPayload {
   qrSvg: string;
 }
 
+const DIRECT_APK_DOWNLOAD_URL =
+  process.env.NEXT_PUBLIC_APK_DOWNLOAD_URL ||
+  "https://github.com/inniable/stock-briefing-app/releases/download/latest-apk/StockBriefing-Android.apk";
+
 export default function MobileInstallModal({
   open,
   onClose,
@@ -38,7 +42,9 @@ export default function MobileInstallModal({
   onInstalled,
 }: MobileInstallModalProps) {
   const [data, setData] = useState<MobileAccessPayload | null>(null);
-  const [selectedMode, setSelectedMode] = useState<"primary" | "lan">("primary");
+  const [selectedMode, setSelectedMode] = useState<"apk" | "primary" | "lan">(
+    "apk"
+  );
   const [copied, setCopied] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [isIos, setIsIos] = useState(false);
@@ -51,7 +57,11 @@ export default function MobileInstallModal({
     setIsStandalone(standalone);
 
     const ua = window.navigator.userAgent.toLowerCase();
-    setIsIos(/iphone|ipad|ipod/.test(ua));
+    const ios = /iphone|ipad|ipod/.test(ua);
+    setIsIos(ios);
+    if (ios) {
+      setSelectedMode("primary");
+    }
   }, [open]);
 
   useEffect(() => {
@@ -59,14 +69,24 @@ export default function MobileInstallModal({
 
     const loadQr = async () => {
       try {
-        // If deployed on a public HTTPS domain (e.g. Vercel), encode current origin directly
+        const ua =
+          typeof window !== "undefined"
+            ? window.navigator.userAgent.toLowerCase()
+            : "";
+        const ios = /iphone|ipad|ipod/.test(ua);
         const origin =
           typeof window !== "undefined" ? window.location.origin : "";
         const isPublicOrigin =
           origin.startsWith("https://") && !origin.includes("localhost");
 
-        const endpoint = isPublicOrigin
-          ? `/api/mobile-access?url=${encodeURIComponent(origin)}`
+        const targetForInitialQr = ios
+          ? isPublicOrigin
+            ? origin
+            : ""
+          : DIRECT_APK_DOWNLOAD_URL;
+
+        const endpoint = targetForInitialQr
+          ? `/api/mobile-access?url=${encodeURIComponent(targetForInitialQr)}`
           : "/api/mobile-access";
 
         const res = await fetch(endpoint);
@@ -81,11 +101,15 @@ export default function MobileInstallModal({
     void loadQr();
   }, [open]);
 
-  const handleModeSwitch = async (mode: "primary" | "lan") => {
+  const handleModeSwitch = async (mode: "apk" | "primary" | "lan") => {
     setSelectedMode(mode);
     if (!data) return;
     const targetUrl =
-      mode === "lan" ? data.lanUrl : data.tunnelUrl || data.primaryUrl;
+      mode === "apk"
+        ? DIRECT_APK_DOWNLOAD_URL
+        : mode === "lan"
+          ? data.lanUrl
+          : data.tunnelUrl || data.lanUrl;
     try {
       const res = await fetch(
         `/api/mobile-access?url=${encodeURIComponent(targetUrl)}`
@@ -119,9 +143,11 @@ export default function MobileInstallModal({
 
   const handleCopyUrl = async () => {
     const urlToCopy =
-      selectedMode === "lan"
-        ? data?.lanUrl
-        : data?.tunnelUrl || data?.primaryUrl;
+      selectedMode === "apk"
+        ? DIRECT_APK_DOWNLOAD_URL
+        : selectedMode === "lan"
+          ? data?.lanUrl
+          : data?.tunnelUrl || data?.primaryUrl;
     if (!urlToCopy) return;
     try {
       await navigator.clipboard.writeText(urlToCopy);
@@ -135,9 +161,11 @@ export default function MobileInstallModal({
   if (!open) return null;
 
   const activeUrl =
-    selectedMode === "lan"
-      ? data?.lanUrl ?? ""
-      : data?.tunnelUrl || data?.primaryUrl || "";
+    selectedMode === "apk"
+      ? DIRECT_APK_DOWNLOAD_URL
+      : selectedMode === "lan"
+        ? data?.lanUrl ?? ""
+        : data?.tunnelUrl || data?.lanUrl || "";
 
   return (
     <div
@@ -156,10 +184,10 @@ export default function MobileInstallModal({
             </div>
             <div>
               <h2 className="text-base font-extrabold text-slate-950 dark:text-white">
-                스마트폰 접속 & 앱 설치
+                스마트폰 APK 다운로드 & 앱 설치
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                아이폰·갤럭시 홈 화면에 네이티브 앱처럼 추가하세요
+                갤럭시 Android APK 직접 설치 및 아이폰 PWA 추가 지원
               </p>
             </div>
           </div>
@@ -177,27 +205,51 @@ export default function MobileInstallModal({
         {isStandalone && (
           <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 p-3.5 text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
             <Check className="h-4 w-4 shrink-0" />
-            <span>현재 스마트폰 홈 화면 앱(PWA) 모드로 실행 중입니다!</span>
+            <span>현재 스마트폰 앱 모드로 실행 중입니다!</span>
           </div>
         )}
 
-        {/* 1-Tap Android / Chrome Native Install Button */}
+        {/* Direct Android APK Download Button */}
+        {!isIos && (
+          <a
+            href={DIRECT_APK_DOWNLOAD_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] py-3.5 px-4 text-sm font-extrabold text-white shadow-md transition-all"
+          >
+            <Download className="h-4 w-4" />
+            <span>Android 설치 파일 다운로드 (StockBriefing.apk)</span>
+          </a>
+        )}
+
+        {/* 1-Tap Android / Chrome Native PWA Install Button */}
         {deferredPrompt && !isStandalone && (
           <button
             type="button"
             onClick={() => void handleNativeInstall()}
-            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-[0.99] py-3.5 px-4 text-sm font-extrabold text-white shadow-md transition-all"
+            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-[0.99] py-3 px-4 text-xs font-extrabold text-white shadow-sm transition-all"
           >
-            <Download className="h-4 w-4" />
-            <span>홈 화면에 앱 바로 설치하기 (1초 완료)</span>
+            <Smartphone className="h-4 w-4" />
+            <span>웹 브라우저 홈 화면 바로가기(PWA)로 추가</span>
           </button>
         )}
 
         {/* Vector SVG QR Code Card for Instant Camera Scan */}
         {data && (
           <div className="rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 flex flex-col items-center text-center space-y-3">
-            {data.tunnelUrl && (
-              <div className="inline-flex rounded-xl bg-slate-200/80 dark:bg-slate-800 p-1 text-[11px] font-bold">
+            <div className="inline-flex flex-wrap justify-center gap-1 rounded-xl bg-slate-200/80 dark:bg-slate-800 p-1 text-[11px] font-bold">
+              <button
+                type="button"
+                onClick={() => void handleModeSwitch("apk")}
+                className={`rounded-lg px-2.5 py-1 transition-colors ${
+                  selectedMode === "apk"
+                    ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 shadow-xs"
+                    : "text-slate-600 dark:text-slate-400"
+                }`}
+              >
+                Android APK 직접 설치
+              </button>
+              {data.tunnelUrl && (
                 <button
                   type="button"
                   onClick={() => void handleModeSwitch("primary")}
@@ -207,25 +259,29 @@ export default function MobileInstallModal({
                       : "text-slate-600 dark:text-slate-400"
                   }`}
                 >
-                  LTE/5G·어디서나 접속 (HTTPS)
+                  모바일 웹 (LTE/5G)
                 </button>
-                <button
-                  type="button"
-                  onClick={() => void handleModeSwitch("lan")}
-                  className={`rounded-lg px-2.5 py-1 transition-colors ${
-                    selectedMode === "lan"
-                      ? "bg-white dark:bg-slate-900 text-blue-700 dark:text-sky-300 shadow-xs"
-                      : "text-slate-600 dark:text-slate-400"
-                  }`}
-                >
-                  동일 Wi-Fi 고속 접속
-                </button>
-              </div>
-            )}
+              )}
+              <button
+                type="button"
+                onClick={() => void handleModeSwitch("lan")}
+                className={`rounded-lg px-2.5 py-1 transition-colors ${
+                  selectedMode === "lan"
+                    ? "bg-white dark:bg-slate-900 text-blue-700 dark:text-sky-300 shadow-xs"
+                    : "text-slate-600 dark:text-slate-400"
+                }`}
+              >
+                동일 Wi-Fi 웹 접속
+              </button>
+            </div>
 
             <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
               <QrCode className="h-3.5 w-3.5 text-blue-600" />
-              <span>스마트폰 기본 카메라로 스캔해 바로 열기</span>
+              <span>
+                {selectedMode === "apk"
+                  ? "갤럭시 카메라로 스캔하면 APK 설치 파일이 바로 다운로드됩니다"
+                  : "스마트폰 기본 카메라로 스캔해 바로 열기"}
+              </span>
             </div>
 
             {/* Pure Inline Vector SVG QR Code (Zero <img> tags) */}
