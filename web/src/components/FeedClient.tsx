@@ -71,8 +71,10 @@ export default function FeedClient() {
   const [realtimeConnected, setRealtimeConnected] = useState<boolean>(false);
   const [newItemsBannerCount, setNewItemsBannerCount] = useState<number>(0);
   const [refreshToast, setRefreshToast] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const [pullDistance, setPullDistance] = useState<number>(0);
   const touchStartYRef = useRef<number | null>(null);
+  const lastFetchedAtRef = useRef<number>(0);
 
   // Mobile PWA & Drawer States
   const [mobileModalOpen, setMobileModalOpen] = useState<boolean>(false);
@@ -342,56 +344,99 @@ export default function FeedClient() {
     }
   };
 
-  const fetchFilings = useCallback(async (isManualRefresh = false) => {
-    if (isManualRefresh) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
-    }
-    setErrorMsg(null);
-
-    if (!isSupabaseConfigured || !supabase) {
-      setItems(DEMO_FILINGS);
-      setLoading(false);
-      setRefreshing(false);
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from("filings_feed")
-        .select("*")
-        .order("published_at", { ascending: false })
-        .limit(150);
-
-      if (error) {
-        throw error;
-      }
-
-      const rows = (data as FilingItem[]) ?? [];
-      setItems(rows);
-      setNewItemsBannerCount(0);
+  const fetchFilings = useCallback(
+    async (isManualRefresh = false, silent = false) => {
       if (isManualRefresh) {
-        const nowTime = new Date().toLocaleTimeString("ko-KR", {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          hour12: false,
-        });
-        setRefreshToast(`최신 동기화 완료 · 총 ${rows.length}건 (${nowTime})`);
-        setTimeout(() => setRefreshToast(null), 2200);
+        setRefreshing(true);
+      } else if (!silent) {
+        setLoading(true);
       }
-    } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "데이터를 불러오는 중 오류가 발생했습니다.";
-      setErrorMsg(message);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+      setErrorMsg(null);
+
+      if (!isSupabaseConfigured || !supabase) {
+        setItems(DEMO_FILINGS);
+        setNowMs(Date.now());
+        lastFetchedAtRef.current = Date.now();
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from("filings_feed")
+          .select("*")
+          .order("published_at", { ascending: false })
+          .limit(150);
+
+        if (error) {
+          throw error;
+        }
+
+        const rows = (data as FilingItem[]) ?? [];
+        const completedAt = Date.now();
+        setItems(rows);
+        setNowMs(completedAt);
+        lastFetchedAtRef.current = completedAt;
+        setNewItemsBannerCount(0);
+        if (isManualRefresh) {
+          const d = new Date(completedAt);
+          const pad2 = (n: number) => String(n).padStart(2, "0");
+          const nowTime = `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(
+            d.getSeconds()
+          )}`;
+          setRefreshToast(`최신 동기화 완료 · 총 ${rows.length}건 (${nowTime})`);
+          setTimeout(() => setRefreshToast(null), 2200);
+        }
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "데이터를 불러오는 중 오류가 발생했습니다.";
+        setErrorMsg(message);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    []
+  );
+
+  // Live relative-time clock tick (every 30s) & foreground resume sync
+  useEffect(() => {
+    const tickId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 30_000);
+
+    const handleResume = () => {
+      const now = Date.now();
+      setNowMs(now);
+      if (now - lastFetchedAtRef.current > 60_000) {
+        void fetchFilings(false, true);
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        handleResume();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+    const appStateListener = isNativeApp()
+      ? App.addListener("appStateChange", ({ isActive }) => {
+          if (isActive) handleResume();
+        })
+      : null;
+
+    return () => {
+      window.clearInterval(tickId);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      if (appStateListener) {
+        void appStateListener.then((handle) => handle.remove());
+      }
+    };
+  }, [fetchFilings]);
 
   useEffect(() => {
     void fetchFilings(false);
@@ -1207,6 +1252,7 @@ export default function FeedClient() {
               <FilingCard
                 key={item.id || item.unique_id}
                 item={item}
+                nowMs={nowMs}
                 largeText={largeText}
                 isWatched={watchlistSet.has(item.ticker.toUpperCase())}
                 isBookmarked={bookmarkSet.has(item.unique_id)}

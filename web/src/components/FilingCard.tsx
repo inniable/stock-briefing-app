@@ -27,6 +27,7 @@ import type { FilingItem, SentimentType, SourceType } from "@/types/filing";
 
 interface FilingCardProps {
   item: FilingItem;
+  nowMs?: number;
   largeText?: boolean;
   isWatched?: boolean;
   isBookmarked?: boolean;
@@ -98,11 +99,41 @@ function getSourceMeta(sourceType: SourceType, filingType: string) {
   }
 }
 
-function formatRelativeTime(isoDate: string): string {
-  const date = new Date(isoDate);
-  if (Number.isNaN(date.getTime())) return "";
+function parseSafeDate(isoDate: string): Date | null {
+  if (!isoDate) return null;
+  // Normalize space-separated Postgres timestamps if any (e.g. '2026-11-04 05:01:01+00')
+  const normalized = isoDate.trim().replace(/^(\d{4}-\d{2}-\d{2})\s+/, "$1T");
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
 
-  const diffMs = Date.now() - date.getTime();
+function formatZoneParts(date: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+
+  const get = (type: string) =>
+    parts.find((p) => p.type === type)?.value ?? "00";
+  const month = get("month").padStart(2, "0");
+  const day = get("day").padStart(2, "0");
+  const rawHour = get("hour");
+  // Guard against Chromium/WebView h24 bug returning '24' at midnight
+  const hour = rawHour === "24" ? "00" : rawHour.padStart(2, "0");
+  const minute = get("minute").padStart(2, "0");
+
+  return `${month}/${day} ${hour}:${minute}`;
+}
+
+function formatRelativeTime(isoDate: string, nowMs: number): string {
+  const date = parseSafeDate(isoDate);
+  if (!date) return "";
+
+  const diffMs = Math.max(0, nowMs - date.getTime());
   const diffMin = Math.floor(diffMs / 60000);
 
   if (diffMin < 1) return "방금 전";
@@ -114,37 +145,22 @@ function formatRelativeTime(isoDate: string): string {
   const diffDay = Math.floor(diffHr / 24);
   if (diffDay < 7) return `${diffDay}일 전`;
 
-  return date.toLocaleDateString("ko-KR", {
-    month: "short",
-    day: "numeric",
-  });
+  return formatZoneParts(date, "Asia/Seoul").split(" ")[0];
 }
 
 function formatDualTimezone(isoDate: string): { kst: string; et: string } {
-  const date = new Date(isoDate);
-  if (Number.isNaN(date.getTime())) return { kst: "", et: "" };
+  const date = parseSafeDate(isoDate);
+  if (!date) return { kst: "", et: "" };
 
-  const kst = new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(date);
-
-  const et = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(date);
-
-  return { kst: `${kst} KST`, et: `${et} ET` };
+  return {
+    kst: `한국 ${formatZoneParts(date, "Asia/Seoul")}`,
+    et: `미동부 ${formatZoneParts(date, "America/New_York")}`,
+  };
 }
 
 export default function FilingCard({
   item,
+  nowMs = Date.now(),
   largeText = false,
   isWatched = false,
   isBookmarked = false,
@@ -368,13 +384,13 @@ export default function FilingCard({
       <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
         <div className="inline-flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
           <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-          <span className="font-semibold text-slate-700 dark:text-slate-300">
-            {formatRelativeTime(item.published_at)}
+          <span className="font-bold text-slate-700 dark:text-slate-300">
+            {formatRelativeTime(item.published_at, nowMs)}
           </span>
           {kst && (
             <>
               <span className="text-slate-300 dark:text-slate-600">·</span>
-              <span className="font-mono text-[11px]">
+              <span className="font-mono text-[11px] text-slate-600 dark:text-slate-400">
                 {kst}{" "}
                 <span className="text-slate-400 dark:text-slate-500">
                   ({et})
