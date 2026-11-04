@@ -8,12 +8,13 @@ export const isSupabaseConfigured =
   Boolean(supabaseAnonKey) &&
   !supabaseUrl.includes("your-project-id.supabase.co");
 
-export const supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey, {
-      realtime: {
-        params: {
-          eventsPerSecond: 5,
+export const supabase: SupabaseClient | null =
+  typeof window !== "undefined" && isSupabaseConfigured
+    ? createClient(supabaseUrl, supabaseAnonKey, {
+        realtime: {
+          params: {
+            eventsPerSecond: 5,
+          },
         },
-      },
-    })
-  : null;
+      })
+    : null;
