@@ -415,7 +415,7 @@ GEMINI_MODEL_CANDIDATES: list[str] = [
     m.strip()
     for m in os.environ.get(
         "GEMINI_MODEL_CANDIDATES",
-        "gemini-3.1-flash-lite,gemini-3.5-flash,gemini-3.8-flash,gemini-2.5-flash",
+        "gemini-3.1-flash-lite,gemini-3.5-flash,gemini-3.5-flash-lite",
     ).split(",")
     if m.strip()
 ]
@@ -566,9 +566,14 @@ def run_collector() -> None:
     cik_map = load_sec_cik_ticker_map(session=session, sec_user_agent=sec_user_agent)
 
     stats = {"checked": 0, "skipped_duplicate": 0, "inserted": 0, "failed": 0}
+    run_started_at = time.monotonic()
+    max_runtime_sec = int(os.environ.get("COLLECTOR_MAX_RUNTIME_SEC", "330"))
     logger.info("Starting all-market collection across %d feeds...", len(feeds))
 
     for feed_cfg in feeds:
+        if time.monotonic() - run_started_at >= max_runtime_sec:
+            logger.info("Reached graceful runtime budget (%ds). Exiting cleanly.", max_runtime_sec)
+            break
         default_ticker = str(feed_cfg.get("ticker", "MARKET")).upper()
         default_company = str(feed_cfg.get("company_name", "Market"))
         source_type = str(feed_cfg.get("source_type", "NEWS")).upper()
@@ -639,6 +644,9 @@ def run_collector() -> None:
                 ]
 
             for entry, entry_ticker, entry_company, _ in selected_tuples:
+                if time.monotonic() - run_started_at >= max_runtime_sec:
+                    logger.info("Reached graceful runtime budget (%ds) inside feed loop. Exiting cleanly.", max_runtime_sec)
+                    return
                 try:
                     stats["checked"] += 1
                     source_url = str(entry.get("link", "") or "").strip()
@@ -744,7 +752,7 @@ def run_collector() -> None:
                         ai_summary.sentiment,
                         ai_summary.headline_kr,
                     )
-                    if stats["inserted"] >= int(config.get("max_inserts_per_run", 20)):
+                    if stats["inserted"] >= int(config.get("max_inserts_per_run", 10)):
                         logger.info(
                             "Reached per-run insert cap (%d). Remaining feeds will continue on next 10-min cycle.",
                             stats["inserted"],
