@@ -411,6 +411,17 @@ def is_already_collected(supabase: Client, unique_id: str) -> bool:
 # ============================================================================
 # 5. Gemini 2.5 Flash AI Summarizer (`google-genai` SDK)
 # ============================================================================
+GEMINI_MODEL_CANDIDATES: list[str] = [
+    m.strip()
+    for m in os.environ.get(
+        "GEMINI_MODEL_CANDIDATES",
+        "gemini-3.5-flash,gemini-3.1-flash-lite,gemini-3.8-flash,gemini-2.5-flash",
+    ).split(",")
+    if m.strip()
+]
+_active_gemini_model: str = GEMINI_MODEL_CANDIDATES[0]
+
+
 def summarize_with_gemini(
     gemini_client: genai.Client,
     ticker_hint: str,
@@ -420,6 +431,7 @@ def summarize_with_gemini(
     original_title: str,
     body_text: str,
 ) -> FilingAISummary | None:
+    global _active_gemini_model
     user_prompt = (
         f"[기본 출처/종목 힌트] {company_hint} ({ticker_hint})\n"
         f"[문서 유형] {source_type} - {filing_type}\n"
@@ -427,42 +439,61 @@ def summarize_with_gemini(
         f"[원문 텍스트 (최대 15,000자)]\n{body_text}\n"
     )
 
-    for attempt in range(1, 4):
-        try:
-            response = gemini_client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=user_prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_INSTRUCTION,
-                    response_mime_type="application/json",
-                    response_schema=FilingAISummary,
-                    temperature=0.2,
-                ),
-            )
-            if not response.text:
-                return None
+    ordered_models = [_active_gemini_model] + [
+        m for m in GEMINI_MODEL_CANDIDATES if m != _active_gemini_model
+    ]
 
-            parsed = FilingAISummary.model_validate_json(response.text)
-            cleaned_lines = [
-                line.strip() for line in parsed.summary_lines if line.strip()
-            ][:3]
-            if cleaned_lines:
-                parsed.summary_lines = cleaned_lines
-            return parsed
-
-        except Exception as exc:
-            err_msg = str(exc)
-            if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
-                wait_sec = 6.0 * attempt
-                logger.warning(
-                    "Gemini rate limit hit (attempt %d/3). Sleeping %.1fs...",
-                    attempt,
-                    wait_sec,
+    for model_name in ordered_models:
+        for attempt in range(1, 3):
+            try:
+                response = gemini_client.models.generate_content(
+                    model=model_name,
+                    contents=user_prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_INSTRUCTION,
+                        response_mime_type="application/json",
+                        response_schema=FilingAISummary,
+                        temperature=0.2,
+                    ),
                 )
-                time.sleep(wait_sec)
-                continue
-            logger.error("Gemini summarization failed for '%s': %s", original_title, exc)
-            return None
+                if not response.text:
+                    break
+
+                parsed = FilingAISummary.model_validate_json(response.text)
+                cleaned_lines = [
+                    line.strip() for line in parsed.summary_lines if line.strip()
+                ][:3]
+                if cleaned_lines:
+                    parsed.summary_lines = cleaned_lines
+                _active_gemini_model = model_name
+                return parsed
+
+            except Exception as exc:
+                err_msg = str(exc)
+                if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
+                    wait_sec = 5.0 * attempt
+                    logger.warning(
+                        "Gemini rate limit on %s (attempt %d/2). Sleeping %.1fs...",
+                        model_name,
+                        attempt,
+                        wait_sec,
+                    )
+                    time.sleep(wait_sec)
+                    continue
+                if "404" in err_msg or "NOT_FOUND" in err_msg or "503" in err_msg or "UNAVAILABLE" in err_msg:
+                    logger.warning(
+                        "Model %s unavailable (%s); trying next fallback model...",
+                        model_name,
+                        err_msg[:120],
+                    )
+                    break
+                logger.error(
+                    "Gemini summarization failed on %s for '%s': %s",
+                    model_name,
+                    original_title,
+                    exc,
+                )
+                break
 
     return None
 
