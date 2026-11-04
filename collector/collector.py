@@ -415,7 +415,7 @@ GEMINI_MODEL_CANDIDATES: list[str] = [
     m.strip()
     for m in os.environ.get(
         "GEMINI_MODEL_CANDIDATES",
-        "gemini-3.5-flash,gemini-3.1-flash-lite,gemini-3.8-flash,gemini-2.5-flash",
+        "gemini-3.1-flash-lite,gemini-3.5-flash,gemini-3.8-flash,gemini-2.5-flash",
     ).split(",")
     if m.strip()
 ]
@@ -557,7 +557,10 @@ def run_collector() -> None:
     feeds: list[dict[str, Any]] = config.get("feeds", [])
 
     supabase: Client = create_client(supabase_url, supabase_key)
-    gemini_client = genai.Client(api_key=gemini_api_key)
+    gemini_client = genai.Client(
+        api_key=gemini_api_key,
+        http_options=types.HttpOptions(timeout=25000),
+    )
     session = create_http_session()
 
     cik_map = load_sec_cik_ticker_map(session=session, sec_user_agent=sec_user_agent)
@@ -741,7 +744,20 @@ def run_collector() -> None:
                         ai_summary.sentiment,
                         ai_summary.headline_kr,
                     )
-                    time.sleep(1.0)
+                    if stats["inserted"] >= int(config.get("max_inserts_per_run", 20)):
+                        logger.info(
+                            "Reached per-run insert cap (%d). Remaining feeds will continue on next 10-min cycle.",
+                            stats["inserted"],
+                        )
+                        logger.info(
+                            "All-market collection finished | Checked: %d | Skipped(Dup): %d | Inserted: %d | Failed: %d",
+                            stats["checked"],
+                            stats["skipped_duplicate"],
+                            stats["inserted"],
+                            stats["failed"],
+                        )
+                        return
+                    time.sleep(0.6)
 
                 except Exception as entry_exc:
                     logger.error(
