@@ -1,0 +1,40 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+web/.env*
+!web/.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+
+# Node / Next.js / Capacitor
+node_modules/
+web/node_modules/
+web/.next/
+web/out/
+web/build/
+web/.apk-build-stash/
+web/android/.gradle/
+web/android/app/build/
+web/android/build/
+web/android/capacitor-cordova-android-plugins/build/
+web/android/local.properties
+*.keystore
+*.jks
+*.tsbuildinfo
+next-env.d.ts
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
+web/.mobile-tunnel-url

@@ -1,0 +1,117 @@
+{
+  "max_items_per_feed": 6,
+  "max_global_sec_items": 15,
+  "max_unprioritized_sec_per_run": 3,
+  "max_text_chars": 15000,
+  "priority_tickers": [
+    "AAPL", "MSFT", "NVDA", "GOOGL", "GOOG", "AMZN", "META", "TSLA", "BRK-B", "BRK-A",
+    "AVGO", "LLY", "JPM", "WMT", "V", "XOM", "MA", "UNH", "ORCL", "COST",
+    "NFLX", "PG", "JNJ", "HD", "ABBV", "BAC", "KO", "CRM", "AMD", "PLTR",
+    "CVX", "TMUS", "WFC", "CSCO", "NOW", "AXP", "MS", "IBM", "PM", "GS",
+    "ABT", "MCD", "BX", "ISRG", "MRK", "PEP", "CAT", "TMO", "LIN", "GE",
+    "DIS", "INTU", "QCOM", "ADBE", "TXN", "BKNG", "T", "VZ", "UBER", "SPGI",
+    "AMGN", "SYK", "BLK", "PFE", "C", "LOW", "SCHW", "HON", "AMAT", "UNP",
+    "NEE", "RTX", "CMCSA", "PGR", "BA", "LRCX", "MU", "INTC", "KLAC", "PANW",
+    "CRWD", "ANET", "ADI", "DE", "GILD", "BSX", "VRTX", "SBUX", "NKE", "ADP",
+    "MDLZ", "BMY", "TJX", "PLD", "COP", "LMT", "MMC", "NOC", "GD", "SO",
+    "COIN", "MSTR", "HOOD", "SNOW", "ARM", "SMCI", "DELL", "HPQ", "PYPL", "SQ",
+    "SHOP", "SPOT", "ABNB", "DASH", "RDDT", "IONQ", "RGTI", "SOFI", "RIVN", "LCID",
+    "F", "GM", "DAL", "UAL", "TGT", "CVS", "CI", "ELV", "REGN", "MRNA"
+  ],
+  "feeds": [
+    {
+      "ticker": "ALL",
+      "company_name": "SEC EDGAR Global 8-K",
+      "source_type": "SEC",
+      "filing_type": "8-K",
+      "is_global_sec": true,
+      "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&CIK=&type=8-K&company=&dateb=&owner=exclude&start=0&count=40&output=atom"
+    },
+    {
+      "ticker": "ALL",
+      "company_name": "SEC EDGAR Insider Form 4",
+      "source_type": "SEC",
+      "filing_type": "Form 4",
+      "is_global_sec": true,
+      "priority_only": true,
+      "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&CIK=&type=4&company=&dateb=&owner=only&start=0&count=40&output=atom"
+    },
+    {
+      "ticker": "MARKET",
+      "company_name": "Yahoo Finance",
+      "source_type": "NEWS",
+      "filing_type": "Market News",
+      "url": "https://feeds.finance.yahoo.com/rss/2.0/headline?s=%5EGSPC,%5EIXIC&region=US&lang=en-US"
+    },
+    {
+      "ticker": "MARKET",
+      "company_name": "CNBC Finance",
+      "source_type": "NEWS",
+      "filing_type": "Market News",
+      "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664"
+    },
+    {
+      "ticker": "MARKET",
+      "company_name": "CNBC Earnings",
+      "source_type": "NEWS",
+      "filing_type": "Earnings News",
+      "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=15839135"
+    },
+    {
+      "ticker": "MARKET",
+      "company_name": "MarketWatch",
+      "source_type": "NEWS",
+      "filing_type": "Top Stories",
+      "url": "https://feeds.content.dowjones.io/public/rss/mw_topstories"
+    },
+    {
+      "ticker": "MARKET",
+      "company_name": "PR Newswire",
+      "source_type": "PRESS",
+      "filing_type": "Press Wire",
+      "url": "https://www.prnewswire.com/rss/financial-services-latest-news/financial-services-latest-news-list.rss"
+    },
+    {
+      "ticker": "NVDA",
+      "company_name": "NVIDIA",
+      "source_type": "PRESS",
+      "filing_type": "Newsroom",
+      "url": "https://nvidianews.nvidia.com/releases.xml"
+    },
+    {
+      "ticker": "AAPL",
+      "company_name": "Apple",
+      "source_type": "PRESS",
+      "filing_type": "Newsroom",
+      "url": "https://www.apple.com/newsroom/rss-feed.rss"
+    },
+    {
+      "ticker": "MSFT",
+      "company_name": "Microsoft",
+      "source_type": "PRESS",
+      "filing_type": "Newsroom",
+      "url": "https://news.microsoft.com/source/feed/"
+    },
+    {
+      "ticker": "GOOGL",
+      "company_name": "Alphabet",
+      "source_type": "PRESS",
+      "filing_type": "Newsroom",
+      "url": "https://blog.google/rss/"
+    },
+    {
+      "ticker": "AMZN",
+      "company_name": "Amazon",
+      "source_type": "PRESS",
+      "filing_type": "Newsroom",
+      "url": "https://www.aboutamazon.com/news/feed"
+    },
+    {
+      "ticker": "META",
+      "company_name": "Meta",
+      "source_type": "PRESS",
+      "filing_type": "Newsroom",
+      "url": "https://about.fb.com/news/feed/"
+    }
+  ]
+}
