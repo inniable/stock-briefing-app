@@ -347,7 +347,7 @@ def extract_sec_filing_text(
                 doc_type.startswith("8-K")
                 or doc_type.startswith("EX-99")
                 or doc_type in ("4", "4/A", "FORM 4")
-                or doc_type.startswith(("SC 13", "SCHEDULE 13", "13F", "10-K", "10-Q", "S-1"))
+                or doc_type.startswith(("SC 13", "SCHEDULE 13", "13F", "10-K", "10-Q", "S-1", "144", "6-K", "NT 10", "DEF 14"))
             ):
                 doc_urls.append(full_doc_url)
 
@@ -580,6 +580,7 @@ def run_collector() -> None:
         source_type = str(feed_cfg.get("source_type", "NEWS")).upper()
         filing_type = str(feed_cfg.get("filing_type", "News"))
         is_global_sec = bool(feed_cfg.get("is_global_sec", False))
+        is_sec_efts = bool(feed_cfg.get("is_sec_efts", False))
         priority_only = bool(feed_cfg.get("priority_only", False))
         feed_url = str(feed_cfg.get("url", ""))
         is_sec = source_type == "SEC"
@@ -606,13 +607,76 @@ def run_collector() -> None:
                 stats["failed"] += 1
                 continue
 
-            parsed_feed = feedparser.parse(resp.content)
-            raw_entries = parsed_feed.entries
-
-            # For global SEC 8-K feed: prioritize S&P 500 / Nasdaq-100 listed tickers first
-            if is_global_sec:
+            if is_sec_efts:
                 prioritized_entries: list[tuple[Any, str, str, bool]] = []
                 general_entries: list[tuple[Any, str, str, bool]] = []
+                hits = (resp.json().get("hits") or {}).get("hits") or []
+                seen_adsh: set[str] = set()
+                for hit in hits:
+                    src = hit.get("_source") or {}
+                    adsh = str(src.get("adsh") or "").strip()
+                    if not adsh or adsh in seen_adsh:
+                        continue
+                    ciks = src.get("ciks") or []
+                    disp_names = src.get("display_names") or []
+                    form_code = str(src.get("form") or filing_type).strip()
+                    file_date = str(src.get("file_date") or "").strip()
+
+                    resolved_ticker: str | None = None
+                    resolved_company: str | None = None
+
+                    for dn in disp_names:
+                        dn_str = str(dn)
+                        cik_m = re.search(r"CIK\s*(\d{10})", dn_str)
+                        if cik_m and cik_m.group(1) in cik_map:
+                            resolved_ticker, resolved_company = cik_map[cik_m.group(1)]
+                            break
+                        tk_m = re.search(r"\(([A-Z]{1,5}(?:-[A-Z])?)\)\s*\(CIK", dn_str)
+                        if tk_m:
+                            resolved_ticker = tk_m.group(1).upper()
+                            resolved_company = dn_str.split("(")[0].strip()
+                            break
+
+                    if not resolved_ticker:
+                        for c_raw in ciks:
+                            c10 = str(c_raw).zfill(10)
+                            if c10 in cik_map:
+                                resolved_ticker, resolved_company = cik_map[c10]
+                                break
+
+                    if not resolved_ticker:
+                        continue
+
+                    seen_adsh.add(adsh)
+                    primary_cik_int = int(str(ciks[0])) if ciks else 0
+                    adsh_nodash = adsh.replace("-", "")
+                    index_link = f"https://www.sec.gov/Archives/edgar/data/{primary_cik_int}/{adsh_nodash}/{adsh}-index.htm"
+                    disp_joined = " | ".join(str(x) for x in disp_names)
+                    synth_entry = {
+                        "id": adsh,
+                        "link": index_link,
+                        "title": f"{form_code} - {disp_joined}",
+                        "published": f"{file_date}T12:00:00Z" if file_date else "",
+                        "summary": f"SEC {form_code} Filing ({disp_joined}) - File Date: {file_date}",
+                    }
+                    if resolved_ticker in priority_tickers:
+                        prioritized_entries.append(
+                            (synth_entry, resolved_ticker, resolved_company or resolved_ticker, True)
+                        )
+                    else:
+                        general_entries.append(
+                            (synth_entry, resolved_ticker, resolved_company or resolved_ticker, False)
+                        )
+
+                extra_general = [] if priority_only else general_entries[:max_unprioritized_sec]
+                selected_tuples = (
+                    prioritized_entries[:max_global_sec_items] + extra_general
+                )[:max_global_sec_items]
+            elif is_global_sec:
+                parsed_feed = feedparser.parse(resp.content)
+                raw_entries = parsed_feed.entries
+                prioritized_entries = []
+                general_entries = []
 
                 for entry in raw_entries:
                     entry_title = str(entry.get("title", "") or "")
@@ -648,6 +712,8 @@ def run_collector() -> None:
                     prioritized_entries[:max_global_sec_items] + extra_general
                 )[:max_global_sec_items]
             else:
+                parsed_feed = feedparser.parse(resp.content)
+                raw_entries = parsed_feed.entries
                 selected_tuples = [
                     (e, default_ticker, default_company, True)
                     for e in raw_entries[:max_items_per_feed]

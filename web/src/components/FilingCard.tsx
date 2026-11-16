@@ -76,6 +76,14 @@ function getSourceMeta(sourceType: SourceType, filingType: string) {
         label:
           filingType === "Form 4"
             ? "SEC 내부자(Form 4)"
+            : filingType === "Form 144" || filingType === "144"
+            ? "SEC 매도예고(144)"
+            : filingType === "6-K"
+            ? "SEC 글로벌상장(6-K)"
+            : filingType.startsWith("NT 10")
+            ? "SEC 실적지연(NT10)"
+            : filingType === "DEF 14A"
+            ? "SEC 주총안건(14A)"
             : filingType === "Schedule 13D"
             ? "SEC 대량보유(13D)"
             : filingType === "13F-HR"
@@ -97,6 +105,12 @@ function getSourceMeta(sourceType: SourceType, filingType: string) {
             ? "공식 보도자료"
             : filingType === "Fed Policy" || filingType === "Fed Release"
             ? "미 연준(Fed) 발표"
+            : filingType === "FDA Release"
+            ? "미 FDA 공식발표"
+            : filingType === "DoD Contract"
+            ? "미 국방부 수주계약"
+            : filingType === "EIA Energy"
+            ? "미 에너지청(EIA)"
             : filingType === "SEC Release"
             ? "SEC 공식 발표"
             : "기업 뉴스룸",
@@ -107,7 +121,14 @@ function getSourceMeta(sourceType: SourceType, filingType: string) {
       };
     default:
       return {
-        label: filingType === "Market Currents" ? "월가 실시간 속보" : "금융 뉴스",
+        label:
+          filingType === "Market Currents"
+            ? "월가 실시간 속보"
+            : filingType === "Congress Trade"
+            ? "미 의회 주식거래"
+            : filingType === "Popular Stocks"
+            ? "인기종목 속보"
+            : "금융 뉴스",
         outlinkLabel: "뉴스 원문 보기",
         badgeClass:
           "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30",

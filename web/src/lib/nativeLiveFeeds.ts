@@ -12,6 +12,7 @@ interface NativeFeedSpec {
   company_name: string;
   default_ticker: string;
   is_sec: boolean;
+  is_sec_efts?: boolean;
   priority_only?: boolean;
   url: string;
 }
@@ -21,6 +22,7 @@ const MAJOR_INSIDER_TICKERS = new Set([
   "AVGO", "LLY", "JPM", "WMT", "V", "XOM", "MA", "UNH", "ORCL", "COST",
   "NFLX", "AMD", "PLTR", "CRM", "GS", "MS", "BAC", "COIN", "ARM", "MU",
   "INTC", "QCOM", "PANW", "CRWD", "SNOW", "UBER", "ABNB", "BA", "CAT", "GE",
+  "TSM", "ASML", "NVO", "IONQ", "RKLB", "SMCI", "LMT", "RTX", "MSTR",
 ]);
 
 const NATIVE_FEEDS: NativeFeedSpec[] = [
@@ -56,6 +58,63 @@ const NATIVE_FEEDS: NativeFeedSpec[] = [
     default_ticker: "SEC",
     is_sec: true,
     url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&CIK=&type=13F-HR&company=&dateb=&owner=include&start=0&count=15&output=atom",
+  },
+  {
+    source_type: "SEC",
+    filing_type: "Form 144",
+    company_name: "SEC EDGAR",
+    default_ticker: "SEC",
+    is_sec: true,
+    is_sec_efts: true,
+    url: "https://efts.sec.gov/LATEST/search-index?forms=144,6-K,NT%2010-Q,NT%2010-K,DEF%2014A",
+  },
+  {
+    source_type: "PRESS",
+    filing_type: "FDA Release",
+    company_name: "미 식품의약국(FDA)",
+    default_ticker: "MARKET",
+    is_sec: false,
+    url: "https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/press-releases/rss.xml",
+  },
+  {
+    source_type: "PRESS",
+    filing_type: "DoD Contract",
+    company_name: "미 국방부(DoD)",
+    default_ticker: "MARKET",
+    is_sec: false,
+    url: "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=400&Site=945&max=10",
+  },
+  {
+    source_type: "PRESS",
+    filing_type: "EIA Energy",
+    company_name: "미 에너지정보청(EIA)",
+    default_ticker: "MARKET",
+    is_sec: false,
+    url: "https://www.eia.gov/rss/press_rss.xml",
+  },
+  {
+    source_type: "PRESS",
+    filing_type: "Newsroom",
+    company_name: "AMD",
+    default_ticker: "AMD",
+    is_sec: false,
+    url: "https://ir.amd.com/news-events/press-releases/rss",
+  },
+  {
+    source_type: "NEWS",
+    filing_type: "Popular Stocks",
+    company_name: "서학개미 인기종목",
+    default_ticker: "MARKET",
+    is_sec: false,
+    url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=PLTR,AVGO,LLY,TSM,ARM,IONQ,RKLB,MU,INTC,TSLA&region=US&lang=en-US",
+  },
+  {
+    source_type: "NEWS",
+    filing_type: "Congress Trade",
+    company_name: "미 의회 주식거래",
+    default_ticker: "MARKET",
+    is_sec: false,
+    url: "https://news.google.com/rss/search?q=%22Periodic+Transaction+Report%22+OR+%22congressional+stock%22+OR+%22Pelosi%22+stock+trade&hl=en-US&gl=US&ceid=US:en",
   },
   {
     source_type: "PRESS",
@@ -204,6 +263,104 @@ export async function fetchNativeLiveFeeds(): Promise<FilingItem[]> {
         },
       });
       if (res.status !== 200 || !res.data) continue;
+      if (feed.is_sec_efts) {
+        const parsedJson = (
+          typeof res.data === "string" ? JSON.parse(res.data) : res.data
+        ) as {
+          hits?: {
+            hits?: Array<{
+              _source?: {
+                adsh?: string;
+                ciks?: string[];
+                display_names?: string[];
+                form?: string;
+                file_date?: string;
+              };
+            }>;
+          };
+        };
+        const hits = parsedJson.hits?.hits ?? [];
+        for (const h of hits.slice(0, 20)) {
+          const src = h._source;
+          if (!src?.adsh) continue;
+          const adsh = src.adsh;
+          if (seenIds.has(adsh)) continue;
+
+          const dispNames = src.display_names ?? [];
+          const ciks = src.ciks ?? [];
+          const formCode = src.form || "144";
+          let resolvedTicker = "";
+          let resolvedTitle = "";
+
+          for (const dn of dispNames) {
+            const tkMatch = dn.match(/\(([A-Z]{1,5}(?:-[A-Z])?)\)\s*\(CIK/);
+            if (tkMatch) {
+              resolvedTicker = tkMatch[1].toUpperCase();
+              resolvedTitle = dn.split("(")[0].trim();
+              break;
+            }
+            const cikM = dn.match(/CIK\s*(\d{10})/);
+            if (cikM && cikMap.has(cikM[1])) {
+              const m = cikMap.get(cikM[1])!;
+              resolvedTicker = m.ticker;
+              resolvedTitle = m.title;
+              break;
+            }
+          }
+          if (!resolvedTicker) {
+            for (const c of ciks) {
+              const c10 = String(c).padStart(10, "0");
+              if (cikMap.has(c10)) {
+                const m = cikMap.get(c10)!;
+                resolvedTicker = m.ticker;
+                resolvedTitle = m.title;
+                break;
+              }
+            }
+          }
+          if (!resolvedTicker || !resolvedTitle) continue;
+          seenIds.add(adsh);
+
+          const primaryCikInt = ciks.length > 0 ? parseInt(ciks[0], 10) : 0;
+          const link = `https://www.sec.gov/Archives/edgar/data/${primaryCikInt}/${adsh.replace(/-/g, "")}/${adsh}-index.htm`;
+          const krName = getKoreanCompanyName(resolvedTicker);
+          const displayLabel = krName
+            ? `${resolvedTitle} (${krName})`
+            : resolvedTitle;
+          const headline =
+            formCode === "144"
+              ? `[실시간 Form 144] ${displayLabel} 임원·대주주 주식 매도 사전예고`
+              : formCode === "6-K"
+              ? `[실시간 6-K] ${displayLabel} 글로벌 상장사 수시공시`
+              : formCode.startsWith("NT 10")
+              ? `[실시간 경보 ${formCode}] ${displayLabel} 실적 보고서 제출 지연 통보`
+              : `[실시간 ${formCode}] ${displayLabel} 주주총회 안건·위임장 공시`;
+
+          collected.push({
+            id: `apk-efts-${adsh}`,
+            unique_id: adsh,
+            ticker: resolvedTicker,
+            company_name: resolvedTitle,
+            source_type: "SEC",
+            filing_type: formCode === "144" ? "Form 144" : formCode,
+            original_title: `${formCode} - ${dispNames.join(" | ")}`,
+            headline_kr: headline,
+            sentiment: formCode.startsWith("NT 10") ? "Bearish" : "Neutral",
+            summary_lines: [
+              `SEC EDGAR에 ${displayLabel}의 ${formCode} 공시(${dispNames.join(" · ")})가 접수되었습니다.`,
+              "하단 'SEC 공시 원문' 버튼으로 즉시 상세 공시 내역을 확인하실 수 있습니다.",
+            ],
+            key_numbers: [humanizeKeyNumber(formCode)],
+            source_url: link,
+            published_at: src.file_date
+              ? new Date(`${src.file_date}T12:00:00Z`).toISOString()
+              : new Date().toISOString(),
+            created_at: new Date().toISOString(),
+          });
+        }
+        continue;
+      }
+
       const xml = typeof res.data === "string" ? res.data : String(res.data);
 
       if (feed.is_sec) {

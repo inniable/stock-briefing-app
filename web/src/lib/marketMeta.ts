@@ -39,6 +39,9 @@ export const KR_COMPANY_NAMES: Record<string, string> = {
   LRCX: "램리서치",
   KLAC: "KLA",
   ARM: "ARM 홀딩스",
+  TSM: "TSMC",
+  ASML: "ASML",
+  NVO: "노보노디스크",
   SMCI: "슈퍼마이크로",
   PLTR: "팔란티어",
   ORCL: "오라클",
@@ -144,6 +147,12 @@ export const POPULAR_WATCHLIST_CANDIDATES: string[] = [
   "META",
   "AMD",
   "AVGO",
+  "TSM",
+  "ASML",
+  "NVO",
+  "MU",
+  "INTC",
+  "ARM",
   "PANW",
   "IONQ",
   "RKLB",
@@ -271,8 +280,11 @@ const TICKER_SECTOR_MAP: Record<string, SectorId> = {
   LRCX: "SEMI",
   KLAC: "SEMI",
   ARM: "SEMI",
+  TSM: "SEMI",
+  ASML: "SEMI",
   SMCI: "SEMI",
   LLY: "BIO",
+  NVO: "BIO",
   UNH: "BIO",
   JNJ: "BIO",
   ABBV: "BIO",
@@ -417,6 +429,18 @@ export function humanizeKeyNumber(tag: string): string {
   if (/^s-1$/i.test(tag.trim())) {
     return "신규 상장 신고서 (S-1)";
   }
+  if (/^(?:form\s*)?144$/i.test(tag.trim())) {
+    return "내부자 매도예고 (Form 144)";
+  }
+  if (/^(?:form\s*)?6-k$/i.test(tag.trim())) {
+    return "글로벌 상장사 수시공시 (6-K)";
+  }
+  if (/^nt\s*10/i.test(tag.trim())) {
+    return "실적보고서 제출지연 경보 (NT 10)";
+  }
+  if (/^def\s*14a$/i.test(tag.trim())) {
+    return "주주총회·액면분할·M&A 안건 (DEF 14A)";
+  }
   return tag;
 }
 
@@ -461,6 +485,42 @@ const GLOSSARY_RULES: { pattern: RegExp; term: string; meaning: string }[] = [
     term: "Form S-1 (신규 상장 IPO 증권신고서)",
     meaning:
       "비상장 기업이 뉴욕증시(NYSE)나 나스닥(NASDAQ)에 신규 상장(IPO)하기 위해 재무 상태와 공모 계획을 공개하는 신고서입니다.",
+  },
+  {
+    pattern: /form\s*144\b|\b144\s*-/i,
+    term: "Form 144 (임원·대주주 주식 매도 사전예고)",
+    meaning:
+      "CEO·창업자·대주주가 보유 주식을 장내에서 일정 규모 이상 매도하기 전에 SEC에 미리 제출해야 하는 매도 예정 신고서입니다.",
+  },
+  {
+    pattern: /\b6-k\b/i,
+    term: "Form 6-K (해외 상장사 수시공시)",
+    meaning:
+      "TSMC, ASML, ARM, 노보노디스크 등 미국 외 국가에 본사를 둔 미국 증시 상장사(ADR)가 실적·주요 경영사항을 발표하는 수시공시입니다.",
+  },
+  {
+    pattern: /\bnt\s*10-[qk]\b|\bnt\s*10\b/i,
+    term: "NT 10-Q / 10-K (실적 보고서 제출 지연 통보)",
+    meaning:
+      "회계 감사 지연이나 재무 이슈 등으로 분기·연간 실적 보고서를 법정 기한 내에 제출하지 못할 때 내는 위험 경보 공시입니다.",
+  },
+  {
+    pattern: /\bdef\s*14a\b/i,
+    term: "DEF 14A (주주총회 위임장·핵심 안건 공시)",
+    meaning:
+      "주주총회에서 표결할 액면분할(Stock Split), 인수합병(M&A), 이사 선임, 임원 보수 한도 등의 세부 안건을 담은 공식 문서입니다.",
+  },
+  {
+    pattern: /\bfda\b/i,
+    term: "FDA (미 식품의약국 신약·의료기기 승인)",
+    meaning:
+      "미국 내 신약 판매 허가·임상 승인·리콜을 결정하는 연방 기관으로, 제약·바이오 기업의 주가에 직접적인 영향을 미칩니다.",
+  },
+  {
+    pattern: /stock\s*act|periodic\s*transaction\s*report|의원\s*주식/i,
+    term: "STOCK Act (미 상·하원 의원 주식거래 공개법)",
+    meaning:
+      "미국 연방 상·하원 의원이 본인 및 배우자의 주식 매매 내역을 45일 이내에 의무 공개하도록 규정한 내부자 거래 방지법입니다.",
   },
   {
     pattern: /item\s*2\.02/i,
@@ -550,6 +610,16 @@ const KEYWORD_TO_TICKER: [RegExp, string, string][] = [
   [/\bmorgan stanley\b/i, "MS", "Morgan Stanley"],
   [/\bpfizer\b/i, "PFE", "Pfizer"],
   [/\bunitedhealth\b/i, "UNH", "UnitedHealth"],
+  [/\btsmc\b|\btaiwan semiconductor\b/i, "TSM", "TSMC"],
+  [/\basml\b/i, "ASML", "ASML"],
+  [/\bnovo nordisk\b/i, "NVO", "Novo Nordisk"],
+  [/\bmicron\b/i, "MU", "Micron"],
+  [/\barm holdings\b/i, "ARM", "ARM Holdings"],
+  [/\bionq\b/i, "IONQ", "IonQ"],
+  [/\brocket lab\b/i, "RKLB", "Rocket Lab"],
+  [/\blockheed martin\b/i, "LMT", "Lockheed Martin"],
+  [/\braytheon\b|\brtx\b/i, "RTX", "RTX"],
+  [/\bsuper micro\b|\bsupermicro\b/i, "SMCI", "Super Micro"],
 ];
 
 export function inferTickerFromNewsText(
