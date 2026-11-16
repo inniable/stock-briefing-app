@@ -347,6 +347,7 @@ def extract_sec_filing_text(
                 doc_type.startswith("8-K")
                 or doc_type.startswith("EX-99")
                 or doc_type in ("4", "4/A", "FORM 4")
+                or doc_type.startswith(("SC 13", "SCHEDULE 13", "13F", "10-K", "10-Q", "S-1"))
             ):
                 doc_urls.append(full_doc_url)
 
@@ -615,13 +616,22 @@ def run_collector() -> None:
 
                 for entry in raw_entries:
                     entry_title = str(entry.get("title", "") or "")
-                    # Skip duplicate non-filer rows in SEC `getcurrent` feed (keep Filer/Issuer)
-                    if "(Subject)" in entry_title or "(Reporting)" in entry_title:
-                        continue
+                    # For Schedule 13D/13G, the public company is marked (Subject) while the activist is (Filed by)
+                    if "13D" in filing_type.upper() or "13G" in filing_type.upper():
+                        if "(Filed by)" in entry_title or "(Reporting)" in entry_title:
+                            continue
+                    else:
+                        # Skip duplicate non-filer rows in SEC `getcurrent` feed (keep Filer/Issuer)
+                        if "(Subject)" in entry_title or "(Reporting)" in entry_title:
+                            continue
                     resolved_ticker, resolved_company = resolve_global_sec_filer(
                         entry_title, cik_map
                     )
                     if not resolved_ticker:
+                        if filing_type.upper() in ("13F-HR", "S-1") and resolved_company:
+                            general_entries.append(
+                                (entry, "MARKET", resolved_company, False)
+                            )
                         # Skip non-exchange-listed shell/trust CIKs to protect LLM quota
                         continue
                     if resolved_ticker in priority_tickers:

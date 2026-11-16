@@ -42,6 +42,46 @@ const NATIVE_FEEDS: NativeFeedSpec[] = [
     url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&CIK=&type=4&company=&dateb=&owner=only&start=0&count=25&output=atom",
   },
   {
+    source_type: "SEC",
+    filing_type: "Schedule 13D",
+    company_name: "SEC EDGAR",
+    default_ticker: "SEC",
+    is_sec: true,
+    url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&CIK=&type=SCHEDULE+13D&company=&dateb=&owner=include&start=0&count=20&output=atom",
+  },
+  {
+    source_type: "SEC",
+    filing_type: "13F-HR",
+    company_name: "SEC EDGAR",
+    default_ticker: "SEC",
+    is_sec: true,
+    url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&CIK=&type=13F-HR&company=&dateb=&owner=include&start=0&count=15&output=atom",
+  },
+  {
+    source_type: "PRESS",
+    filing_type: "Fed Policy",
+    company_name: "미 연준(Fed)",
+    default_ticker: "MARKET",
+    is_sec: false,
+    url: "https://www.federalreserve.gov/feeds/press_monetary.xml",
+  },
+  {
+    source_type: "NEWS",
+    filing_type: "Market Currents",
+    company_name: "Seeking Alpha",
+    default_ticker: "MARKET",
+    is_sec: false,
+    url: "https://seekingalpha.com/market_currents.xml",
+  },
+  {
+    source_type: "NEWS",
+    filing_type: "Earnings News",
+    company_name: "Nasdaq Earnings",
+    default_ticker: "MARKET",
+    is_sec: false,
+    url: "https://www.nasdaq.com/feed/rssoutbound?category=Earnings",
+  },
+  {
     source_type: "NEWS",
     filing_type: "Market News",
     company_name: "Yahoo Finance",
@@ -72,6 +112,14 @@ const NATIVE_FEEDS: NativeFeedSpec[] = [
     default_ticker: "MARKET",
     is_sec: false,
     url: "https://www.prnewswire.com/rss/financial-services-latest-news/financial-services-latest-news-list.rss",
+  },
+  {
+    source_type: "PRESS",
+    filing_type: "Press Wire",
+    company_name: "PR Newswire Tech",
+    default_ticker: "MARKET",
+    is_sec: false,
+    url: "https://www.prnewswire.com/rss/consumer-technology-latest-news/consumer-technology-latest-news-list.rss",
   },
 ];
 
@@ -162,7 +210,11 @@ export async function fetchNativeLiveFeeds(): Promise<FilingItem[]> {
         const entries = xml.match(/<entry>[\s\S]*?<\/entry>/gi) ?? [];
         for (const entryXml of entries) {
           const rawTitle = extractTag(entryXml, "title");
-          if (rawTitle.includes("(Subject)") || rawTitle.includes("(Reporting)")) {
+          if (feed.filing_type === "Schedule 13D") {
+            if (rawTitle.includes("(Filed by)") || rawTitle.includes("(Reporting)")) {
+              continue;
+            }
+          } else if (rawTitle.includes("(Subject)") || rawTitle.includes("(Reporting)")) {
             continue;
           }
           const link = extractAtomLink(entryXml);
@@ -173,8 +225,11 @@ export async function fetchNativeLiveFeeds(): Promise<FilingItem[]> {
           const cikMatch = rawTitle.match(/\((\d{10})\)/);
           const cik10 = cikMatch ? cikMatch[1] : "";
           const mapped = cik10 ? cikMap.get(cik10) : undefined;
-          if (!mapped) continue;
-          if (feed.priority_only && !MAJOR_INSIDER_TICKERS.has(mapped.ticker)) {
+          const fallbackNameMatch = rawTitle.match(/^[^-]+-\s*(.+?)\s*\(\d{10}\)/);
+          const resolvedTicker = mapped?.ticker ?? (feed.filing_type === "13F-HR" ? "MARKET" : "");
+          const resolvedTitle = mapped?.title ?? (fallbackNameMatch ? fallbackNameMatch[1].trim() : "");
+          if (!resolvedTicker || !resolvedTitle) continue;
+          if (feed.priority_only && !MAJOR_INSIDER_TICKERS.has(resolvedTicker)) {
             continue;
           }
 
@@ -185,35 +240,48 @@ export async function fetchNativeLiveFeeds(): Promise<FilingItem[]> {
           if (seenIds.has(uniqueId)) continue;
           seenIds.add(uniqueId);
 
-          const krName = getKoreanCompanyName(mapped.ticker);
-          const displayLabel = krName
-            ? `${mapped.title} (${krName})`
-            : mapped.title;
+          const krName = getKoreanCompanyName(resolvedTicker);
+          const displayLabel =
+            krName && resolvedTicker !== "MARKET"
+              ? `${resolvedTitle} (${krName})`
+              : resolvedTitle;
           const itemMatches = summaryRaw.match(/Item\s+\d+\.\d+/gi) ?? [];
           const itemTags = itemMatches
             .slice(0, 2)
             .map((m) => humanizeKeyNumber(m));
           const isForm4 = feed.filing_type === "Form 4";
+          const is13D = feed.filing_type === "Schedule 13D";
+          const is13F = feed.filing_type === "13F-HR";
 
           collected.push({
             id: `apk-sec-${uniqueId}`,
             unique_id: uniqueId,
-            ticker: mapped.ticker,
-            company_name: mapped.title,
+            ticker: resolvedTicker,
+            company_name: resolvedTitle,
             source_type: "SEC",
             filing_type: feed.filing_type,
             original_title: rawTitle,
             headline_kr: isForm4
               ? `[실시간 Form 4] ${displayLabel} 임원·내부자 지분 변동 공시`
+              : is13D
+              ? `[실시간 13D] ${displayLabel} 5% 이상 대량보유·행동주의 지분 공시`
+              : is13F
+              ? `[실시간 13F] ${displayLabel} 기관투자자 분기 보유 종목 공시`
               : `[실시간 8-K] ${displayLabel} 신규 수시공시 접수`,
             sentiment: "Neutral",
             summary_lines: [
               summaryRaw ||
                 `SEC EDGAR 실시간 피드를 통해 ${displayLabel}의 ${feed.filing_type} 공시가 접수되었습니다.`,
-              "Supabase + Gemini 2.5 Flash 연동 시 한글 3줄 요약 및 호재/악재 분류가 자동 동기화됩니다.",
+              "Supabase + Gemini 연동 시 한글 3줄 요약 및 호재/악재 분류가 자동 동기화됩니다.",
             ],
             key_numbers: [
-              isForm4 ? "내부자 지분변동 (Form 4)" : "수시공시 (Form 8-K)",
+              isForm4
+                ? "내부자 지분변동 (Form 4)"
+                : is13D
+                ? "5% 대량보유·행동주의 (13D)"
+                : is13F
+                ? "기관 포트폴리오 (13F-HR)"
+                : "수시공시 (Form 8-K)",
               ...itemTags,
             ],
             source_url: link,

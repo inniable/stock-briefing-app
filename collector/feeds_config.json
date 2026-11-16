@@ -2,7 +2,7 @@
   "max_items_per_feed": 4,
   "max_global_sec_items": 15,
   "max_unprioritized_sec_per_run": 3,
-  "max_inserts_per_run": 12,
+  "max_inserts_per_run": 14,
   "max_text_chars": 15000,
   "priority_tickers": [
     "AAPL", "MSFT", "NVDA", "GOOGL", "GOOG", "AMZN", "META", "TSLA", "BRK-B", "BRK-A",
@@ -36,6 +36,60 @@
       "is_global_sec": true,
       "priority_only": true,
       "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&CIK=&type=4&company=&dateb=&owner=only&start=0&count=40&output=atom"
+    },
+    {
+      "ticker": "ALL",
+      "company_name": "SEC EDGAR Schedule 13D",
+      "source_type": "SEC",
+      "filing_type": "Schedule 13D",
+      "is_global_sec": true,
+      "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&CIK=&type=SCHEDULE+13D&company=&dateb=&owner=include&start=0&count=40&output=atom"
+    },
+    {
+      "ticker": "ALL",
+      "company_name": "SEC EDGAR Institutional 13F",
+      "source_type": "SEC",
+      "filing_type": "13F-HR",
+      "is_global_sec": true,
+      "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&CIK=&type=13F-HR&company=&dateb=&owner=include&start=0&count=25&output=atom"
+    },
+    {
+      "ticker": "ALL",
+      "company_name": "SEC EDGAR Annual 10-K",
+      "source_type": "SEC",
+      "filing_type": "10-K",
+      "is_global_sec": true,
+      "priority_only": true,
+      "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&CIK=&type=10-K&company=&dateb=&owner=exclude&start=0&count=30&output=atom"
+    },
+    {
+      "ticker": "ALL",
+      "company_name": "SEC EDGAR IPO S-1",
+      "source_type": "SEC",
+      "filing_type": "S-1",
+      "is_global_sec": true,
+      "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&CIK=&type=S-1&company=&dateb=&owner=exclude&start=0&count=25&output=atom"
+    },
+    {
+      "ticker": "MARKET",
+      "company_name": "미 연준(Fed) 통화정책",
+      "source_type": "PRESS",
+      "filing_type": "Fed Policy",
+      "url": "https://www.federalreserve.gov/feeds/press_monetary.xml"
+    },
+    {
+      "ticker": "MARKET",
+      "company_name": "미 연준(Fed) 공식발표",
+      "source_type": "PRESS",
+      "filing_type": "Fed Release",
+      "url": "https://www.federalreserve.gov/feeds/press_all.xml"
+    },
+    {
+      "ticker": "MARKET",
+      "company_name": "미 증권거래위원회(SEC)",
+      "source_type": "PRESS",
+      "filing_type": "SEC Release",
+      "url": "https://www.sec.gov/news/pressreleases.rss"
     },
     {
       "ticker": "NVDA",
@@ -81,10 +135,45 @@
     },
     {
       "ticker": "MARKET",
-      "company_name": "PR Newswire",
+      "company_name": "PR Newswire Finance",
       "source_type": "PRESS",
       "filing_type": "Press Wire",
       "url": "https://www.prnewswire.com/rss/financial-services-latest-news/financial-services-latest-news-list.rss"
+    },
+    {
+      "ticker": "MARKET",
+      "company_name": "PR Newswire Tech",
+      "source_type": "PRESS",
+      "filing_type": "Press Wire",
+      "url": "https://www.prnewswire.com/rss/consumer-technology-latest-news/consumer-technology-latest-news-list.rss"
+    },
+    {
+      "ticker": "MARKET",
+      "company_name": "PR Newswire Bio·Health",
+      "source_type": "PRESS",
+      "filing_type": "Press Wire",
+      "url": "https://www.prnewswire.com/rss/health-latest-news/health-latest-news-list.rss"
+    },
+    {
+      "ticker": "MARKET",
+      "company_name": "Seeking Alpha 속보",
+      "source_type": "NEWS",
+      "filing_type": "Market Currents",
+      "url": "https://seekingalpha.com/market_currents.xml"
+    },
+    {
+      "ticker": "MARKET",
+      "company_name": "Nasdaq Earnings",
+      "source_type": "NEWS",
+      "filing_type": "Earnings News",
+      "url": "https://www.nasdaq.com/feed/rssoutbound?category=Earnings"
+    },
+    {
+      "ticker": "MARKET",
+      "company_name": "Nasdaq Markets",
+      "source_type": "NEWS",
+      "filing_type": "Market News",
+      "url": "https://www.nasdaq.com/feed/rssoutbound?category=Markets"
     },
     {
       "ticker": "MARKET",

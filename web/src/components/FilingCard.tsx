@@ -76,6 +76,14 @@ function getSourceMeta(sourceType: SourceType, filingType: string) {
         label:
           filingType === "Form 4"
             ? "SEC 내부자(Form 4)"
+            : filingType === "Schedule 13D"
+            ? "SEC 대량보유(13D)"
+            : filingType === "13F-HR"
+            ? "SEC 기관보유(13F)"
+            : filingType === "10-K"
+            ? "SEC 연간보고서(10-K)"
+            : filingType === "S-1"
+            ? "SEC IPO신고(S-1)"
             : `SEC ${filingType || "8-K"}`,
         outlinkLabel: "SEC 공시 원문",
         badgeClass:
@@ -84,15 +92,22 @@ function getSourceMeta(sourceType: SourceType, filingType: string) {
       };
     case "PRESS":
       return {
-        label: filingType === "Press Wire" ? "공식 보도자료" : "기업 뉴스룸",
-        outlinkLabel: "보도자료 원문",
+        label:
+          filingType === "Press Wire"
+            ? "공식 보도자료"
+            : filingType === "Fed Policy" || filingType === "Fed Release"
+            ? "미 연준(Fed) 발표"
+            : filingType === "SEC Release"
+            ? "SEC 공식 발표"
+            : "기업 뉴스룸",
+        outlinkLabel: "공식 발표 원문",
         badgeClass:
           "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/15 dark:text-violet-300 dark:border-violet-500/30",
         Icon: Building2,
       };
     default:
       return {
-        label: "금융 뉴스",
+        label: filingType === "Market Currents" ? "월가 실시간 속보" : "금융 뉴스",
         outlinkLabel: "뉴스 원문 보기",
         badgeClass:
           "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30",

@@ -405,6 +405,18 @@ export function humanizeKeyNumber(tag: string): string {
   if (/^form\s*8-k$/i.test(tag.trim())) {
     return "수시공시 (Form 8-K)";
   }
+  if (/^(?:schedule\s*13d|sc\s*13d)$/i.test(tag.trim())) {
+    return "5% 대량보유·행동주의 (13D)";
+  }
+  if (/^13f(?:-hr)?$/i.test(tag.trim())) {
+    return "기관 포트폴리오 (13F-HR)";
+  }
+  if (/^10-k$/i.test(tag.trim())) {
+    return "연간 실적보고서 (10-K)";
+  }
+  if (/^s-1$/i.test(tag.trim())) {
+    return "신규 상장 신고서 (S-1)";
+  }
   return tag;
 }
 
@@ -425,6 +437,30 @@ const GLOSSARY_RULES: { pattern: RegExp; term: string; meaning: string }[] = [
     term: "Form 4 (내부자 거래 공시)",
     meaning:
       "CEO·임원·이사회·10% 이상 대주주가 자사 주식을 매수하거나 매도했을 때 2영업일 이내에 보고하는 지분 변동 공시입니다.",
+  },
+  {
+    pattern: /schedule\s*13d|sc\s*13d|\b13d\b/i,
+    term: "Schedule 13D (5% 이상 대량보유·행동주의 공시)",
+    meaning:
+      "특정 투자자나 행동주의 펀드가 상장사 지분을 5% 이상 매집하며 경영 참여·인수합병 등을 목적으로 제출하는 핵심 지분 공시입니다.",
+  },
+  {
+    pattern: /13f-hr|\b13f\b/i,
+    term: "Form 13F-HR (기관투자자 분기 포트폴리오 공시)",
+    meaning:
+      "워런 버핏(버크셔 해서웨이) 등 운용자산 1억 달러 이상 월가 대형 기관투자자가 매 분기 말 보유 주식 내역을 의무 공개하는 공시입니다.",
+  },
+  {
+    pattern: /\b10-k\b/i,
+    term: "Form 10-K (연간 사업·실적 보고서)",
+    meaning:
+      "미국 상장사가 매년 1회 회계감사를 거쳐 재무제표, 사업 위험요인, 경영진 분석을 종합 제출하는 공식 연간 보고서입니다.",
+  },
+  {
+    pattern: /\bs-1\b/i,
+    term: "Form S-1 (신규 상장 IPO 증권신고서)",
+    meaning:
+      "비상장 기업이 뉴욕증시(NYSE)나 나스닥(NASDAQ)에 신규 상장(IPO)하기 위해 재무 상태와 공모 계획을 공개하는 신고서입니다.",
   },
   {
     pattern: /item\s*2\.02/i,
