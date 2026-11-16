@@ -79,9 +79,10 @@ jobs:
       - name: Build Signed Play Store AAB & Installable APK (Target SDK 35)
         working-directory: web/android
         env:
-          ANDROID_VERSION_CODE: ${{ 10 + github.run_number }}
+          RUN_NUM: ${{ github.run_number }}
           ANDROID_VERSION_NAME: "1.1.${{ github.run_number }}"
         run: |
+          export ANDROID_VERSION_CODE=$((10 + RUN_NUM))
           chmod +x gradlew
           ./gradlew bundleRelease assembleRelease --no-daemon
 
