@@ -2,6 +2,7 @@
   "max_items_per_feed": 4,
   "max_global_sec_items": 15,
   "max_unprioritized_sec_per_run": 3,
+  "max_inserts_per_feed": 2,
   "max_inserts_per_run": 16,
   "max_text_chars": 15000,
   "priority_tickers": [

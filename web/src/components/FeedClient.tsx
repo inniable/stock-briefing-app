@@ -608,11 +608,15 @@ export default function FeedClient() {
   ]);
 
   const countsBySentiment = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     let bullish = 0;
     let bearish = 0;
     let neutral = 0;
     for (const item of items) {
-      if (selectedTicker === "WATCHLIST" && !watchlistSet.has(item.ticker)) {
+      if (hiddenSet.has(item.unique_id)) {
+        continue;
+      }
+      if (selectedTicker === "WATCHLIST" && !itemMatchesWatchlist(item, watchlistSet)) {
         continue;
       }
       if (selectedTicker === "BOOKMARKS" && !bookmarkSet.has(item.unique_id)) {
@@ -626,15 +630,56 @@ export default function FeedClient() {
       ) {
         continue;
       }
+      if (selectedSector !== "ALL") {
+        const itemSector = inferSector(
+          item.ticker,
+          `${item.company_name} ${item.headline_kr} ${item.original_title}`
+        );
+        if (itemSector !== selectedSector) {
+          continue;
+        }
+      }
       if (selectedSource !== "ALL" && item.source_type !== selectedSource) {
         continue;
+      }
+      if (unreadOnly && readSet.has(item.unique_id)) {
+        continue;
+      }
+      if (q) {
+        const krComp = getKoreanCompanyName(item.ticker) ?? "";
+        const haystack = [
+          item.ticker,
+          krComp,
+          item.company_name,
+          item.filing_type,
+          item.headline_kr,
+          item.original_title,
+          ...(Array.isArray(item.summary_lines) ? item.summary_lines : []),
+          ...(Array.isArray(item.key_numbers) ? item.key_numbers : []),
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) {
+          continue;
+        }
       }
       if (item.sentiment === "Bullish") bullish += 1;
       else if (item.sentiment === "Bearish") bearish += 1;
       else neutral += 1;
     }
     return { bullish, bearish, neutral };
-  }, [items, selectedTicker, selectedSource, watchlistSet, bookmarkSet]);
+  }, [
+    items,
+    selectedTicker,
+    selectedSector,
+    selectedSource,
+    unreadOnly,
+    watchlistSet,
+    bookmarkSet,
+    readSet,
+    hiddenSet,
+    searchQuery,
+  ]);
 
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     if (watchlistModalOpen || mobileModalOpen) return;

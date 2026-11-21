@@ -396,17 +396,43 @@ def extract_press_release_text(
 
 
 # ============================================================================
-# 4. Supabase Deduplication
+# 4. Supabase Deduplication (Batch Lookup to Avoid N+1 Queries)
 # ============================================================================
-def is_already_collected(supabase: Client, unique_id: str) -> bool:
-    result = (
-        supabase.table("filings_feed")
-        .select("unique_id")
-        .eq("unique_id", unique_id)
-        .limit(1)
-        .execute()
-    )
-    return bool(result.data)
+def fetch_existing_unique_ids(supabase: Client, unique_ids: list[str]) -> set[str]:
+    """Batch-fetches already collected unique_ids in chunks of 50."""
+    deduped = list(dict.fromkeys(uid for uid in unique_ids if uid))
+    if not deduped:
+        return set()
+
+    existing: set[str] = set()
+    chunk_size = 50
+    for i in range(0, len(deduped), chunk_size):
+        chunk = deduped[i : i + chunk_size]
+        result = (
+            supabase.table("filings_feed")
+            .select("unique_id")
+            .in_("unique_id", chunk)
+            .execute()
+        )
+        for row in result.data or []:
+            uid = row.get("unique_id")
+            if uid:
+                existing.add(str(uid))
+    return existing
+
+
+def resolve_efts_published_at(file_date: str) -> str:
+    """Prevents future timestamps when SEC EFTS only provides a YYYY-MM-DD file_date."""
+    now_utc = datetime.now(timezone.utc)
+    if not file_date:
+        return now_utc.isoformat()
+    if file_date == now_utc.strftime("%Y-%m-%d"):
+        return now_utc.isoformat()
+    try:
+        candidate = datetime.fromisoformat(f"{file_date}T21:00:00+00:00")
+        return min(candidate, now_utc).isoformat()
+    except ValueError:
+        return now_utc.isoformat()
 
 
 # ============================================================================
@@ -551,11 +577,17 @@ def run_collector() -> None:
     max_items_per_feed: int = int(config.get("max_items_per_feed", 6))
     max_global_sec_items: int = int(config.get("max_global_sec_items", 15))
     max_unprioritized_sec: int = int(config.get("max_unprioritized_sec_per_run", 3))
+    max_inserts_per_feed: int = int(config.get("max_inserts_per_feed", 2))
+    max_inserts_per_run: int = int(config.get("max_inserts_per_run", 16))
     max_text_chars: int = int(config.get("max_text_chars", 15000))
     priority_tickers: set[str] = {
         str(t).upper() for t in config.get("priority_tickers", [])
     }
     feeds: list[dict[str, Any]] = config.get("feeds", [])
+    if feeds:
+        rotation_offset = int(time.time() // 600) % len(feeds)
+        feeds = feeds[rotation_offset:] + feeds[:rotation_offset]
+        logger.info("Feed rotation offset: %d/%d", rotation_offset, len(feeds))
 
     supabase: Client = create_client(supabase_url, supabase_key)
     gemini_client = genai.Client(
@@ -656,7 +688,7 @@ def run_collector() -> None:
                         "id": adsh,
                         "link": index_link,
                         "title": f"{form_code} - {disp_joined}",
-                        "published": f"{file_date}T12:00:00Z" if file_date else "",
+                        "published": resolve_efts_published_at(file_date),
                         "summary": f"SEC {form_code} Filing ({disp_joined}) - File Date: {file_date}",
                     }
                     if resolved_ticker in priority_tickers:
@@ -719,7 +751,23 @@ def run_collector() -> None:
                     for e in raw_entries[:max_items_per_feed]
                 ]
 
+            # STEP A: Batch deduplicate in Supabase BEFORE fetching HTML or calling Gemini
+            candidate_ids = [
+                extract_unique_id(entry, source_type=source_type)
+                for entry, _, _, _ in selected_tuples
+            ]
+            existing_ids = fetch_existing_unique_ids(supabase, candidate_ids)
+            feed_inserted = 0
+
             for entry, entry_ticker, entry_company, _ in selected_tuples:
+                if feed_inserted >= max_inserts_per_feed:
+                    logger.info(
+                        "[%s | %s] Reached per-feed insert cap (%d). Moving to next feed.",
+                        default_company,
+                        source_type,
+                        max_inserts_per_feed,
+                    )
+                    break
                 if time.monotonic() - run_started_at >= max_runtime_sec:
                     logger.info("Reached graceful runtime budget (%ds) inside feed loop. Exiting cleanly.", max_runtime_sec)
                     return
@@ -733,10 +781,10 @@ def run_collector() -> None:
                     if not unique_id:
                         continue
 
-                    # STEP A: Deduplicate in Supabase BEFORE fetching HTML or calling Gemini
-                    if is_already_collected(supabase, unique_id):
+                    if unique_id in existing_ids:
                         stats["skipped_duplicate"] += 1
                         continue
+                    existing_ids.add(unique_id)
 
                     original_title = str(
                         entry.get("title", "") or f"{entry_company} {filing_type}"
@@ -821,6 +869,7 @@ def run_collector() -> None:
 
                     supabase.table("filings_feed").insert(payload).execute()
                     stats["inserted"] += 1
+                    feed_inserted += 1
                     logger.info(
                         "[%s | %s] Inserted [%s] %s",
                         final_ticker,
@@ -828,7 +877,7 @@ def run_collector() -> None:
                         ai_summary.sentiment,
                         ai_summary.headline_kr,
                     )
-                    if stats["inserted"] >= int(config.get("max_inserts_per_run", 10)):
+                    if stats["inserted"] >= max_inserts_per_run:
                         logger.info(
                             "Reached per-run insert cap (%d). Remaining feeds will continue on next 10-min cycle.",
                             stats["inserted"],
